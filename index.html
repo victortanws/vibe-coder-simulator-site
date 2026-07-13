@@ -13,14 +13,16 @@
   }
   *{box-sizing:border-box}
   html{scroll-behavior:smooth}
-  body{margin:0;background:var(--bg);color:var(--ink);font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;line-height:1.5}
+  body{margin:0;overflow-x:hidden;background:var(--bg);color:var(--ink);font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;line-height:1.5}
   .micro{font:700 11px/1.2 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.14em;text-transform:uppercase;color:var(--orange2)}
   .wrap{max-width:1180px;margin:0 auto;padding:0 22px}
   nav{position:sticky;top:0;z-index:40;background:rgba(13,16,24,.92);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
-  nav .wrap{display:flex;gap:4px;align-items:center;padding:10px 22px;overflow-x:auto}
+  nav .wrap{display:flex;gap:4px;align-items:center;padding:10px 22px}
   nav b{font-size:13px;letter-spacing:-.02em;margin-right:12px;white-space:nowrap}
+  .nav-links{display:flex;gap:4px;align-items:center;min-width:0}
   nav a{color:var(--muted);text-decoration:none;font-size:12px;font-weight:700;padding:7px 11px;border-radius:999px;white-space:nowrap}
   nav a:hover{color:var(--ink);background:var(--panel2)}
+  .nav-toggle{display:none;border:1px solid var(--line);border-radius:9px;background:var(--panel2);color:var(--ink);min-width:44px;min-height:44px;padding:8px 12px;font-weight:800;cursor:pointer}
   section{padding:74px 0;border-bottom:1px solid var(--line)}
   h2{font-size:clamp(26px,3.4vw,40px);letter-spacing:-.03em;line-height:1.08;margin:10px 0 14px}
   h3{font-size:17px;margin:0 0 8px}
@@ -60,6 +62,9 @@
   /* DEMO */
   .demo-frame{margin-top:26px;border:1px solid var(--line);border-radius:18px;overflow:hidden;box-shadow:var(--shadow);background:var(--panel)}
   .demo-frame iframe{width:100%;height:820px;border:0;display:block}
+  .mobile-play{display:none;position:relative;min-height:470px;padding:24px;align-items:flex-end;background:linear-gradient(180deg,rgba(6,8,14,.1),rgba(6,8,14,.94)),url('ChatGPT/UI-UX/backgrounds/BG-12/bg-12-dark-night-garage-v1.png') center/cover}
+  .mobile-play-card{width:100%;padding:20px;border:1px solid var(--line);border-left:4px solid var(--orange);border-radius:14px;background:rgba(13,16,24,.96);box-shadow:var(--shadow)}
+  .mobile-play-card h3{font-size:24px;line-height:1.1;margin:7px 0 10px}.mobile-play-card p{margin:0 0 16px;color:var(--muted);font-size:14px}.mobile-play-card .btn{display:block;min-height:48px;text-align:center}
   .demo-note{display:flex;gap:12px;justify-content:space-between;align-items:center;padding:12px 16px;border-top:1px solid var(--line);flex-wrap:wrap}
   .demo-note p{margin:0;font-size:12.5px;color:var(--muted)}
   .demo-frame.expanded{position:fixed;inset:8px;z-index:100;margin:0;border-radius:14px;display:flex;flex-direction:column;background:var(--bg)}
@@ -155,11 +160,29 @@
     .demo-frame iframe{height:640px}
   }
   @media(max-width:700px){
+    .wrap{padding-left:16px;padding-right:16px}
+    nav .wrap{padding:8px 16px;justify-content:space-between;flex-wrap:wrap}
+    nav b{margin-right:auto;font-size:12px}
+    .nav-toggle{display:block}
+    .nav-links{display:none;flex-basis:100%;width:100%;padding:8px 0 5px;grid-template-columns:1fr 1fr;gap:4px}
+    nav.menu-open .nav-links{display:grid}
+    nav .nav-links a{padding:11px 10px;border:1px solid transparent;border-radius:8px;white-space:normal}
+    nav .nav-links a:focus-visible{border-color:var(--cyan)}
+    section{padding:52px 0}
     .hero{background-position:64% 24%;background-size:auto 100%}
-    .hero .wrap{align-items:flex-end;min-height:700px;padding-top:300px}
-    .hero-copy{width:100%;max-width:none;padding:30px 0 38px;background:linear-gradient(90deg,rgba(13,16,24,.9),rgba(13,16,24,.72))}
+    .hero .wrap{align-items:flex-end;min-height:640px;padding-top:250px}
+    .hero-copy{width:100%;max-width:none;padding:24px 0 32px;background:linear-gradient(90deg,rgba(13,16,24,.94),rgba(13,16,24,.78))}
+    .hero h1{font-size:clamp(42px,13vw,58px)}
+    .hero p{font-size:16px}
+    .hero-cta .btn{width:100%;min-height:48px;text-align:center}
     .grid3,.gallery,.people-grid,.roadmap{grid-template-columns:1fr}
     .oracle-art{min-height:420px}.oracle-copy{padding:28px}
+    .demo-frame iframe{display:none}
+    .mobile-play{display:flex}
+    .demo-note{padding:12px 14px}.demo-note p{font-size:12px}.demo-note #demo-expand{display:none}
+    .budget-table{display:block;overflow-x:auto}
+    .scene{min-height:700px}
+    .scene-box{max-height:68%;overflow:auto}
     footer .wrap{grid-template-columns:1fr;text-align:center}
     .creator-credit{grid-column:1;flex-wrap:wrap;row-gap:5px}
   }
@@ -167,10 +190,13 @@
 </head>
 <body>
 
-<nav><div class="wrap">
+<nav id="site-nav"><div class="wrap">
   <b>VIBE CODER SIMULATOR</b>
-  <a href="#premise">The game</a><a href="#play">Play now!</a><a href="#world">The world</a>
-  <a href="#people">Meet the cast</a><a href="#cutscene">Reality... Fiction... Or both?</a><a href="#proof">What it is</a><a href="#funding">What backing builds</a><a href="#backing">Back the game</a>
+  <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="nav-links">Menu</button>
+  <div class="nav-links" id="nav-links">
+    <a href="#premise">The game</a><a href="#play">Play now!</a><a href="#world">The world</a>
+    <a href="#people">Meet the cast</a><a href="#cutscene">Reality... Fiction... Or both?</a><a href="#proof">What it is</a><a href="#funding">What backing builds</a><a href="#backing">Back the game</a>
+  </div>
 </div></nav>
 
 <!-- ============ HERO ============ -->
@@ -236,6 +262,14 @@
   station, decide what to build with ORACLE, test the result, use the rest of your day,
   and decide how to launch. This interactive prototype is the opening taste of the full RPG.</p>
   <div class="demo-frame">
+    <div class="mobile-play">
+      <div class="mobile-play-card">
+        <div class="micro">Made for your phone</div>
+        <h3>Play in a full-screen mobile view</h3>
+        <p>The prototype opens as its own page so the game, choices, and dialogs can use your entire screen.</p>
+        <a class="btn primary" href="playable-prototype-v5.html">Launch the mobile prototype ▶</a>
+      </div>
+    </div>
     <iframe src="playable-prototype-v5.html" title="Vibe Coder Simulator — playable Day 7/8 slice"></iframe>
     <div class="demo-note">
       <p>Choose a station to open its action. Movement is intentionally disabled in this preview.</p>
@@ -469,6 +503,18 @@ const sceneBox = document.getElementById('scene-box');
 const sceneArt = document.getElementById('scene-art');
 const demoFrame = document.querySelector('.demo-frame');
 const demoExpand = document.getElementById('demo-expand');
+const siteNav = document.getElementById('site-nav');
+const navToggle = siteNav.querySelector('.nav-toggle');
+navToggle.onclick = () => {
+  const open = siteNav.classList.toggle('menu-open');
+  navToggle.setAttribute('aria-expanded', String(open));
+  navToggle.textContent = open ? 'Close' : 'Menu';
+};
+siteNav.querySelectorAll('.nav-links a').forEach(link => link.onclick = () => {
+  siteNav.classList.remove('menu-open');
+  navToggle.setAttribute('aria-expanded', 'false');
+  navToggle.textContent = 'Menu';
+});
 function setDemoExpanded(expanded){
   demoFrame.classList.toggle('expanded', expanded);
   document.body.classList.toggle('demo-expanded', expanded);
