@@ -138,7 +138,10 @@
     .scene{min-height:calc(100dvh - 24px);border-radius:0}.scene-character{z-index:1;top:8px;bottom:auto;left:50%;width:96%;height:52dvh;max-width:96%;object-position:center top;transform:translateX(-50%);-webkit-mask-image:linear-gradient(to bottom,#000 0%,#000 82%,transparent 100%);mask-image:linear-gradient(to bottom,#000 0%,#000 82%,transparent 100%);filter:drop-shadow(0 16px 20px rgba(0,0,0,.62))}.scene-box,.scene-box.wide{z-index:2;top:auto;right:3%;left:3%;bottom:max(2%,env(safe-area-inset-bottom));width:auto;max-height:56dvh;overflow:auto;padding:15px;background:rgba(13,16,24,.96);box-shadow:0 -18px 42px rgba(0,0,0,.42),var(--shadow)}.scene-box h2{font-size:21px}.scene-box p{font-size:14px}.phone-msg{padding:11px 12px}.phone-msg p{font-size:13px}.scene-box .modal-actions{position:sticky;bottom:-15px;margin:10px -15px -15px;padding:10px 15px 15px;background:linear-gradient(180deg,rgba(13,16,24,0),rgba(13,16,24,.99) 24%)}.modal-actions .btn,.scene-actions .btn,.qa-option,.task-card .btn,.build-card .btn{min-height:44px}
     .record-row{grid-template-columns:1fr}.toast{width:calc(100% - 24px);bottom:max(12px,env(safe-area-inset-bottom))}
   }
-  @media(max-width:760px) and (orientation:portrait){.orientation-hint{display:block}}
+  @media(max-width:760px) and (orientation:portrait){
+    .orientation-hint{display:block}
+    .player{left:66%!important;top:88%!important;width:68px;height:68px}
+  }
   @media(prefers-reduced-motion:reduce){.player,.toast{transition:none}}
 </style>
 </head>
@@ -183,7 +186,7 @@
         <div class="player" id="player" role="img" aria-label="Founder in orange-and-white hoodie"></div>
       </section>
       <div class="world-message" id="world-message">Read the overnight message before spending the day.</div>
-      <div class="controls"><div class="help">Choose a station to act. The Founder stays centered in this preview.</div><div class="button-row"><button class="btn" id="record">Company record</button><button class="btn primary" id="end-day" disabled>End day</button></div></div>
+      <div class="controls"><div class="help">Choose a station to act. The Founder stays staged on the open floor in this preview.</div><div class="button-row"><button class="btn" id="record">Company record</button><button class="btn primary" id="end-day" disabled>End day</button></div></div>
     </main>
 
     <aside class="side economy">
