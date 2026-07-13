@@ -169,8 +169,8 @@
     nav .nav-links a{padding:11px 10px;border:1px solid transparent;border-radius:8px;white-space:normal}
     nav .nav-links a:focus-visible{border-color:var(--cyan)}
     section{padding:52px 0}
-    .hero{background-position:64% 24%;background-size:auto 100%}
-    .hero .wrap{align-items:flex-end;min-height:640px;padding-top:250px}
+    .hero{background-position:center,center,28% top;background-size:cover,cover,auto 430px;background-repeat:no-repeat;background-color:#111525}
+    .hero .wrap{align-items:flex-end;min-height:680px;padding-top:280px}
     .hero-copy{width:100%;max-width:none;padding:24px 0 32px;background:linear-gradient(90deg,rgba(13,16,24,.94),rgba(13,16,24,.78))}
     .hero h1{font-size:clamp(42px,13vw,58px)}
     .hero p{font-size:16px}
@@ -182,7 +182,9 @@
     .demo-note{padding:12px 14px}.demo-note p{font-size:12px}.demo-note #demo-expand{display:none}
     .budget-table{display:block;overflow-x:auto}
     .scene{min-height:700px}
-    .scene-box{max-height:68%;overflow:auto}
+    .scene-character{top:18px;bottom:auto;left:50%;width:94%;height:47%;max-width:94%;object-position:center top;transform:translateX(-50%)}
+    .scene-box{bottom:2%;max-height:57%;overflow:auto;z-index:2}
+    .scene-actions{position:sticky;bottom:-20px;margin:10px -20px -20px;padding:10px 20px 18px;background:linear-gradient(180deg,rgba(13,16,24,0),rgba(13,16,24,.98) 24%)}
     footer .wrap{grid-template-columns:1fr;text-align:center}
     .creator-credit{grid-column:1;flex-wrap:wrap;row-gap:5px}
   }
@@ -266,7 +268,7 @@
       <div class="mobile-play-card">
         <div class="micro">Made for your phone</div>
         <h3>Play in a full-screen mobile view</h3>
-        <p>The prototype opens as its own page so the game, choices, and dialogs can use your entire screen.</p>
+        <p>The prototype opens as its own page so the game, choices, and dialogs can use your entire screen. Portrait works; landscape gives you the widest cinematic view.</p>
         <a class="btn primary" href="playable-prototype-v5.html">Launch the mobile prototype ▶</a>
       </div>
     </div>

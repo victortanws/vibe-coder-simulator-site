@@ -19,6 +19,7 @@
   .eyebrow,.micro{font:700 11px/1.2 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.12em;text-transform:uppercase;color:var(--orange2)}
   h1{font-size:clamp(24px,3vw,40px);line-height:1;margin:5px 0 0;letter-spacing:-.04em}
   .prototype-tag{color:var(--muted);font-size:13px;text-align:right}.prototype-tag b{color:var(--yellow)}
+  .orientation-hint{display:none;max-width:1500px;margin:0 auto 8px;padding:9px 11px;border:1px solid rgba(98,230,226,.34);border-radius:10px;background:rgba(98,230,226,.08);color:var(--muted);font-size:12px;line-height:1.35}.orientation-hint b{color:var(--cyan)}
   .hud{max-width:1500px;margin:0 auto 12px;display:grid;grid-template-columns:repeat(6,minmax(100px,1fr));gap:8px}
   .hud-card{background:rgba(23,27,39,.9);border:1px solid var(--line);border-radius:12px;padding:9px 11px;min-width:0}
   .hud-card span{display:block;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.08em}
@@ -134,9 +135,10 @@
     .controls{align-items:stretch;flex-direction:column;padding:12px}.button-row{justify-content:stretch}.button-row .btn{flex:1;min-height:44px}
     .economy{display:block}.brief-grid,.copy-grid,.task-grid,.prompt-top,.scope-grid,.build-choice{grid-template-columns:1fr}.coverage,.cost-preview{grid-template-columns:repeat(2,1fr)}
     .overlay{padding:0;place-items:stretch}.modal{width:100%;height:100dvh;max-height:none;border:0;border-radius:0;padding-bottom:env(safe-area-inset-bottom)}.modal-head{position:sticky;top:0;z-index:3;padding:13px 14px;background:rgba(23,27,39,.98)}.modal-head h2{font-size:19px}.modal-body{padding:12px}
-    .scene{min-height:calc(100dvh - 24px);border-radius:0}.scene-character{height:42%;max-width:72%;left:-6%}.scene-box,.scene-box.wide{top:auto;right:3%;left:3%;bottom:max(2%,env(safe-area-inset-bottom));width:auto;max-height:72dvh;overflow:auto;padding:15px;background:rgba(13,16,24,.98)}.scene-box h2{font-size:21px}.scene-box p{font-size:14px}.phone-msg{padding:11px 12px}.phone-msg p{font-size:13px}.modal-actions .btn,.scene-actions .btn,.qa-option,.task-card .btn,.build-card .btn{min-height:44px}
+    .scene{min-height:calc(100dvh - 24px);border-radius:0}.scene-character{z-index:1;top:12px;bottom:auto;left:50%;width:96%;height:45dvh;max-width:96%;object-position:center top;transform:translateX(-50%)}.scene-box,.scene-box.wide{z-index:2;top:auto;right:3%;left:3%;bottom:max(2%,env(safe-area-inset-bottom));width:auto;max-height:56dvh;overflow:auto;padding:15px;background:rgba(13,16,24,.96)}.scene-box h2{font-size:21px}.scene-box p{font-size:14px}.phone-msg{padding:11px 12px}.phone-msg p{font-size:13px}.scene-box .modal-actions{position:sticky;bottom:-15px;margin:10px -15px -15px;padding:10px 15px 15px;background:linear-gradient(180deg,rgba(13,16,24,0),rgba(13,16,24,.99) 24%)}.modal-actions .btn,.scene-actions .btn,.qa-option,.task-card .btn,.build-card .btn{min-height:44px}
     .record-row{grid-template-columns:1fr}.toast{width:calc(100% - 24px);bottom:max(12px,env(safe-area-inset-bottom))}
   }
+  @media(max-width:760px) and (orientation:portrait){.orientation-hint{display:block}}
   @media(prefers-reduced-motion:reduce){.player,.toast{transition:none}}
 </style>
 </head>
@@ -146,6 +148,7 @@
     <div><div class="eyebrow">Playable vertical slice · build, prove, launch, learn</div><h1>Vibe Coder Simulator</h1></div>
     <div class="prototype-tag"><b>Investor prototype</b><br>incident-led product strategy</div>
   </header>
+  <div class="orientation-hint"><b>Portrait mode is supported.</b> Rotate to landscape any time for a wider, more cinematic game view.</div>
 
   <section class="hud" aria-label="Current company status">
     <div class="hud-card"><span>Day / time</span><strong id="hud-day">07 · 09:00</strong><small>actions advance the clock</small></div>
