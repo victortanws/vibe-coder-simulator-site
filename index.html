@@ -70,6 +70,10 @@
   .demo-frame.expanded{position:fixed;inset:8px;z-index:100;margin:0;border-radius:14px;display:flex;flex-direction:column;background:var(--bg)}
   .demo-frame.expanded iframe{height:auto;min-height:0;flex:1}
   .demo-frame.expanded .demo-note{background:var(--panel)}
+  .demo-close{display:none;position:absolute;z-index:104;top:max(12px,env(safe-area-inset-top));right:max(12px,env(safe-area-inset-right));align-items:center;gap:7px;min-height:44px;padding:9px 13px;border:1px solid rgba(255,255,255,.28);border-radius:999px;background:rgba(13,16,24,.92);box-shadow:0 8px 24px rgba(0,0,0,.5);color:var(--ink);font:800 12px/1 ui-sans-serif,system-ui;backdrop-filter:blur(10px);cursor:pointer}
+  .demo-close:hover,.demo-close:focus-visible{border-color:var(--cyan);color:var(--cyan);outline:none}
+  .demo-close .x{font-size:20px;font-weight:500;line-height:.8}
+  .demo-frame.expanded .demo-close{display:inline-flex}
   body.demo-expanded{overflow:hidden}
 
   /* WORLD GALLERY */
@@ -180,6 +184,10 @@
     .demo-frame iframe{display:none}
     .mobile-play{display:flex}
     .demo-note{padding:12px 14px}.demo-note p{font-size:12px}.demo-note #demo-expand{display:none}
+    .demo-frame.expanded{inset:0;border:0;border-radius:0}
+    .demo-frame.expanded iframe{display:block}
+    .demo-frame.expanded .mobile-play,.demo-frame.expanded .demo-note{display:none}
+    .demo-frame.expanded .demo-close{top:max(10px,env(safe-area-inset-top));right:max(10px,env(safe-area-inset-right))}
     .budget-table{display:block;overflow-x:auto}
     .scene{min-height:700px}
     .scene-character{top:18px;bottom:auto;left:50%;width:94%;height:47%;max-width:94%;object-position:center top;transform:translateX(-50%)}
@@ -269,9 +277,10 @@
         <div class="micro">Made for your phone</div>
         <h3>Play in a full-screen mobile view</h3>
         <p>The prototype opens as its own page so the game, choices, and dialogs can use your entire screen. Portrait works; landscape gives you the widest cinematic view.</p>
-        <a class="btn primary" href="playable-prototype-v5.html">Launch the mobile prototype ▶</a>
+        <button class="btn primary" type="button" id="mobile-demo-launch" aria-expanded="false">Launch the mobile prototype ▶</button>
       </div>
     </div>
+    <button class="demo-close" type="button" id="demo-close" aria-label="Close the expanded game"><span class="x" aria-hidden="true">×</span><span>Exit game</span></button>
     <iframe src="playable-prototype-v5.html" title="Vibe Coder Simulator — playable Day 7/8 slice"></iframe>
     <div class="demo-note">
       <p>Choose a station to open its action. Movement is intentionally disabled in this preview.</p>
@@ -505,6 +514,9 @@ const sceneBox = document.getElementById('scene-box');
 const sceneArt = document.getElementById('scene-art');
 const demoFrame = document.querySelector('.demo-frame');
 const demoExpand = document.getElementById('demo-expand');
+const mobileDemoLaunch = document.getElementById('mobile-demo-launch');
+const demoClose = document.getElementById('demo-close');
+let demoReturnFocus = null;
 const siteNav = document.getElementById('site-nav');
 const navToggle = siteNav.querySelector('.nav-toggle');
 navToggle.onclick = () => {
@@ -517,13 +529,19 @@ siteNav.querySelectorAll('.nav-links a').forEach(link => link.onclick = () => {
   navToggle.setAttribute('aria-expanded', 'false');
   navToggle.textContent = 'Menu';
 });
-function setDemoExpanded(expanded){
+function setDemoExpanded(expanded, trigger){
+  if(expanded) demoReturnFocus = trigger || document.activeElement;
   demoFrame.classList.toggle('expanded', expanded);
   document.body.classList.toggle('demo-expanded', expanded);
   demoExpand.setAttribute('aria-expanded', String(expanded));
+  mobileDemoLaunch.setAttribute('aria-expanded', String(expanded));
   demoExpand.textContent = expanded ? 'Exit expanded player' : 'Expand player';
+  if(expanded) demoClose.focus();
+  else if(demoReturnFocus && typeof demoReturnFocus.focus === 'function') demoReturnFocus.focus();
 }
-demoExpand.onclick = () => setDemoExpanded(!demoFrame.classList.contains('expanded'));
+demoExpand.onclick = () => setDemoExpanded(!demoFrame.classList.contains('expanded'), demoExpand);
+mobileDemoLaunch.onclick = () => setDemoExpanded(true, mobileDemoLaunch);
+demoClose.onclick = () => setDemoExpanded(false);
 document.addEventListener('keydown', event => {
   if(event.key === 'Escape' && demoFrame.classList.contains('expanded')) setDemoExpanded(false);
 });
