@@ -1,0 +1,13 @@
+.DS_Store
+Thumbs.db
+
+# Historical assets retained locally but not shipped by the current campaign build.
+ChatGPT/R-assets/agents/
+ChatGPT/R-assets/cast/CAST-04/
+ChatGPT/UI-UX/icons/
+assets/generated/sprites/PC-01/*.png
+assets/scenes/BG-03-the-foundry-day.png
+assets/scenes/BG-05-demo-day-stage.png
+assets/scenes/BG-17-reception-hall-afternoon.png
+assets/scenes/END-05-grandmother-call-evening.png
+assets/scenes/characters/CAST-30-aman-rahim/

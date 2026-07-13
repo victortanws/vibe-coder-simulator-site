@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vibe Coder Simulator — The startup RPG</title>
+<style>
+  :root{
+    --bg:#0d1018;--panel:#171b27;--panel2:#202536;--panel3:#292f42;--ink:#f5f0e6;
+    --muted:#aba8b1;--line:#3b4257;--orange:#ff7a3d;--orange2:#ffb26f;--cyan:#62e6e2;
+    --green:#73e7a6;--yellow:#f3cc62;--red:#ff7777;--violet:#aa92ff;
+    --shadow:0 20px 55px rgba(0,0,0,.35)
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;line-height:1.5}
+  .micro{font:700 11px/1.2 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.14em;text-transform:uppercase;color:var(--orange2)}
+  .wrap{max-width:1180px;margin:0 auto;padding:0 22px}
+  nav{position:sticky;top:0;z-index:40;background:rgba(13,16,24,.92);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+  nav .wrap{display:flex;gap:4px;align-items:center;padding:10px 22px;overflow-x:auto}
+  nav b{font-size:13px;letter-spacing:-.02em;margin-right:12px;white-space:nowrap}
+  nav a{color:var(--muted);text-decoration:none;font-size:12px;font-weight:700;padding:7px 11px;border-radius:999px;white-space:nowrap}
+  nav a:hover{color:var(--ink);background:var(--panel2)}
+  section{padding:74px 0;border-bottom:1px solid var(--line)}
+  h2{font-size:clamp(26px,3.4vw,40px);letter-spacing:-.03em;line-height:1.08;margin:10px 0 14px}
+  h3{font-size:17px;margin:0 0 8px}
+  p.lead{font-size:17px;color:var(--muted);max-width:760px}
+  .btn{display:inline-block;border:1px solid var(--line);border-radius:10px;background:var(--panel2);color:var(--ink);padding:12px 18px;cursor:pointer;font-weight:800;font-size:14px;text-decoration:none}
+  .btn:hover{border-color:var(--orange2)}
+  .btn.primary{background:var(--orange);border-color:var(--orange);color:#17110d}
+  .btn.cyan{background:rgba(98,230,226,.14);border-color:var(--cyan);color:var(--cyan)}
+
+  /* HERO */
+  .hero{position:relative;overflow:hidden;border-bottom:1px solid var(--line);background:
+    linear-gradient(90deg,rgba(13,16,24,.03) 0%,rgba(13,16,24,.16) 30%,rgba(13,16,24,.78) 58%,rgba(13,16,24,.96) 100%),
+    linear-gradient(180deg,rgba(13,16,24,.15) 0%,rgba(13,16,24,.2) 55%,rgba(13,16,24,.96) 100%),
+    url('assets/scenes/founder-vibe-coding/pc-01-demo-day-presentation-success-v1.png') 78% 24%/cover}
+  .hero .wrap{display:flex;justify-content:flex-end;align-items:flex-end;min-height:640px;padding-top:70px;padding-bottom:0}
+  .hero-copy{padding-bottom:56px;max-width:590px;width:52%}
+  .hero h1{font-size:clamp(44px,7vw,86px);line-height:.95;letter-spacing:-.05em;margin:14px 0 4px}
+  .hero h1 span{color:var(--orange)}
+  .tagline{font:700 15px ui-monospace,monospace;color:var(--cyan);margin:10px 0 16px}
+  .hero p{color:#d9d4c8;font-size:17px;max-width:560px;margin:0 0 24px}
+  .hero-cta{display:flex;gap:10px;flex-wrap:wrap}
+  .hero-art{align-self:end;display:flex;justify-content:center}
+  .hero-art img{max-height:540px;max-width:100%;filter:drop-shadow(0 24px 34px rgba(0,0,0,.55))}
+  .badges{display:flex;gap:8px;flex-wrap:wrap;margin-top:22px}
+  .badge{font:700 11px ui-monospace,monospace;letter-spacing:.06em;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:6px 11px;background:rgba(23,27,39,.75)}
+
+  /* CARDS */
+  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin:26px 0 0}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:20px;box-shadow:var(--shadow)}
+  .card .k{font:700 11px ui-monospace,monospace;letter-spacing:.1em;color:var(--cyan)}
+  .card h3{font-size:19px;margin:8px 0 8px}
+  .card p{font-size:13.5px;color:var(--muted);margin:0}
+  .loop-line{display:flex;gap:8px;flex-wrap:wrap;margin-top:26px}
+  .loop-chip{font:700 12px ui-monospace,monospace;border:1px solid var(--line);border-radius:999px;padding:8px 13px;color:var(--ink);background:var(--panel2)}
+  .loop-chip.arrow{border:0;background:none;color:var(--orange2)}
+
+  /* DEMO */
+  .demo-frame{margin-top:26px;border:1px solid var(--line);border-radius:18px;overflow:hidden;box-shadow:var(--shadow);background:var(--panel)}
+  .demo-frame iframe{width:100%;height:820px;border:0;display:block}
+  .demo-note{display:flex;gap:12px;justify-content:space-between;align-items:center;padding:12px 16px;border-top:1px solid var(--line);flex-wrap:wrap}
+  .demo-note p{margin:0;font-size:12.5px;color:var(--muted)}
+  .demo-frame.expanded{position:fixed;inset:8px;z-index:100;margin:0;border-radius:14px;display:flex;flex-direction:column;background:var(--bg)}
+  .demo-frame.expanded iframe{height:auto;min-height:0;flex:1}
+  .demo-frame.expanded .demo-note{background:var(--panel)}
+  body.demo-expanded{overflow:hidden}
+
+  /* WORLD GALLERY */
+  .gallery{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+  .shot{position:relative;margin:0;border:1px solid var(--line);border-radius:12px;overflow:hidden;aspect-ratio:16/9;background:var(--panel2)}
+  .shot img{width:100%;height:100%;object-fit:cover;display:block;transition:transform .25s}
+  .shot:hover img{transform:scale(1.04)}
+  .shot figcaption{position:absolute;inset:auto 0 0 0;padding:20px 10px 8px;background:linear-gradient(180deg,transparent,rgba(4,6,10,.88));font:700 11px ui-monospace,monospace;letter-spacing:.05em}
+
+  /* PEOPLE + AGENTS */
+  .people-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-top:26px}
+  .people-card{overflow:hidden;border:1px solid var(--line);border-radius:18px;background:var(--panel);box-shadow:var(--shadow)}
+  .people-portrait{height:285px;display:flex;align-items:flex-end;justify-content:center;background:radial-gradient(circle at 50% 32%,rgba(98,230,226,.16),transparent 42%),linear-gradient(160deg,#252b3c,#11151f);overflow:hidden}
+  .people-portrait img{display:block;width:100%;height:100%;object-fit:contain;object-position:center bottom;padding:14px 12px 0;filter:drop-shadow(0 14px 18px rgba(0,0,0,.48))}
+  .people-copy{padding:15px 16px 18px}
+  .people-copy .role{font:700 10px ui-monospace,monospace;letter-spacing:.11em;text-transform:uppercase;color:var(--orange2)}
+  .people-copy h3{font-size:20px;line-height:1.1;margin:7px 0 8px}
+  .people-copy p{font-size:12.5px;color:var(--muted);margin:0;line-height:1.48}
+  .oracle-showcase{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(300px,.95fr);overflow:hidden;border:1px solid var(--line);border-radius:24px;background:linear-gradient(135deg,#12172a,#191c2a);box-shadow:var(--shadow)}
+  .oracle-art{min-height:560px;display:flex;align-items:center;justify-content:center;padding:20px;background:radial-gradient(circle at 50% 40%,rgba(170,146,255,.18),transparent 54%),#090d18}
+  .oracle-art img{display:block;width:100%;height:100%;max-height:620px;object-fit:contain;object-position:center}
+  .oracle-copy{align-self:center;padding:clamp(28px,5vw,66px)}
+  .oracle-copy h2{font-size:clamp(34px,5vw,62px);margin:8px 0 16px}
+  .oracle-copy p{font-size:16px;color:var(--muted);line-height:1.65;margin:0 0 22px}
+
+  .roadmap{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:14px}
+  .road-step{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:14px}
+  .road-step .n{display:block;color:var(--orange2);font:700 11px ui-monospace,monospace;margin-bottom:6px}
+  .road-step b{display:block;font-size:14px;margin-bottom:5px}
+  .road-step p{margin:0;color:var(--muted);font-size:12px;line-height:1.45}
+  .development{margin-top:18px;padding:20px;background:linear-gradient(135deg,rgba(98,230,226,.08),rgba(255,122,61,.06));border:1px solid var(--line);border-radius:16px}
+  .development h3{font-size:22px;margin:6px 0 7px}.development>p{max-width:790px;color:var(--muted);margin:0;font-size:14px}
+
+  /* CUTSCENE */
+  .scene-shell{margin-top:26px;border:1px solid var(--line);border-radius:18px;overflow:hidden;box-shadow:var(--shadow)}
+  .scene{position:relative;min-height:600px;background:linear-gradient(180deg,rgba(11,13,18,.18),rgba(11,13,18,.87)),url('assets/scenes/BG-11-summit-table.png') center/cover}
+  .scene-character{position:absolute;left:2%;bottom:0;height:92%;max-width:44%;object-fit:contain;object-position:left bottom;filter:drop-shadow(0 18px 22px rgba(0,0,0,.6));transition:opacity .2s}
+  .scene-box{position:absolute;right:3%;top:7%;width:56%;background:rgba(13,16,24,.94);border:1px solid var(--line);border-left:4px solid var(--violet);border-radius:14px;padding:20px;box-shadow:var(--shadow)}
+  .scene-box .speaker{font:700 11px ui-monospace,monospace;letter-spacing:.1em;color:var(--violet)}
+  .scene-box h4{font-size:22px;margin:8px 0 10px;letter-spacing:-.02em}
+  .scene-box p{font-size:15.5px;line-height:1.55;margin:0 0 12px}
+  .scene-box .aside{font-size:12px;color:var(--muted);border-top:1px solid var(--line);padding-top:10px;margin-top:4px}
+  .scene-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:8px}
+  .hud-mock{background:#11151f;border:1px dashed var(--line);border-radius:10px;padding:10px 13px;font:12.5px/1.7 ui-monospace,monospace;color:var(--yellow);margin:10px 0}
+  .ticker{background:#11151f;border:1px solid var(--line);border-radius:10px;padding:10px 13px;font:12px/1.6 ui-monospace,monospace;color:var(--cyan);margin:10px 0}
+
+  /* DESIGN NOTES */
+  .note-card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:20px;margin-top:14px}
+  .note-card .q{font-size:16px;font-weight:800;margin:0 0 8px}
+  .note-card p{font-size:13.5px;color:var(--muted);margin:0 0 8px}
+  .status{display:inline-block;font:700 10px ui-monospace,monospace;letter-spacing:.08em;border-radius:999px;padding:4px 10px;margin-bottom:10px}
+  .status.shipped{color:var(--green);border:1px solid rgba(115,231,166,.5)}
+  .status.next{color:var(--yellow);border:1px solid rgba(243,204,98,.5)}
+  .status.shift{color:var(--red);border:1px solid rgba(255,119,119,.5)}
+
+  /* KICKSTARTER */
+  .ks-grid{display:grid;grid-template-columns:1.2fr 1fr;gap:16px;margin-top:26px}
+  .scopebox{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px}
+  .scopebox.risk{border-color:rgba(255,119,119,.5)}
+  .scopebox h3{font-size:14px}
+  .scopebox ul{margin:0;padding-left:18px;color:var(--muted);font-size:13px;line-height:1.65}
+  .tiers{width:100%;border-collapse:collapse;margin-top:14px}
+  .tiers td{padding:10px 8px;border-bottom:1px solid var(--line);font-size:13px;vertical-align:top}
+  .tiers td:first-child{font:700 13px ui-monospace,monospace;color:var(--orange2);white-space:nowrap}
+  .budget-table{width:100%;border-collapse:collapse;margin-top:18px;background:var(--panel);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+  .budget-table th,.budget-table td{padding:12px 14px;border-bottom:1px solid var(--line);font-size:13px;text-align:left;vertical-align:top}
+  .budget-table th{font:700 10px ui-monospace,monospace;letter-spacing:.09em;color:var(--orange2);background:var(--panel2)}
+  .budget-table td:nth-child(2){color:var(--muted)}
+  .budget-table td:last-child,.budget-table th:last-child{text-align:right;white-space:nowrap;font-family:ui-monospace,monospace;color:var(--ink)}
+  .budget-table tr:last-child td{border-bottom:0;font-weight:800;background:rgba(255,122,61,.08)}
+  .plain-rule{border-left:3px solid var(--cyan);padding:10px 13px;background:rgba(98,230,226,.08);font-size:13.5px;line-height:1.5;margin:18px 0;border-radius:0 8px 8px 0}
+  footer{padding:44px 0 64px;color:var(--muted);font-size:12.5px}
+  footer .wrap{display:grid;grid-template-columns:1fr auto;align-items:center;gap:14px 28px}
+  .creator-credit{grid-column:1/-1;display:flex;align-items:center;justify-content:center;gap:9px;padding-top:18px;margin-top:6px;border-top:1px solid rgba(59,66,87,.58);color:#7f8190;font-size:11.5px;letter-spacing:.01em}
+  .creator-credit a{color:#999aa7;text-decoration:none;transition:color .18s ease}
+  .creator-credit a:hover,.creator-credit a:focus-visible{color:var(--cyan)}
+  .creator-credit .dot{color:#555b70;font-size:9px}
+
+  @media(max-width:980px){
+    .hero .wrap{min-height:0}
+    .hero-copy{padding-bottom:44px;width:58%}
+    .grid3,.gallery,.people-grid,.roadmap{grid-template-columns:1fr 1fr}
+    .oracle-showcase{grid-template-columns:1fr}.oracle-art{min-height:480px}
+    .ks-grid{grid-template-columns:1fr}
+    .scene{min-height:660px}
+    .scene-character{height:50%;max-width:70%;left:-4%}
+    .scene-box{top:auto;bottom:3%;left:3%;right:3%;width:auto}
+    .demo-frame iframe{height:640px}
+  }
+  @media(max-width:700px){
+    .hero{background-position:64% 24%;background-size:auto 100%}
+    .hero .wrap{align-items:flex-end;min-height:700px;padding-top:300px}
+    .hero-copy{width:100%;max-width:none;padding:30px 0 38px;background:linear-gradient(90deg,rgba(13,16,24,.9),rgba(13,16,24,.72))}
+    .grid3,.gallery,.people-grid,.roadmap{grid-template-columns:1fr}
+    .oracle-art{min-height:420px}.oracle-copy{padding:28px}
+    footer .wrap{grid-template-columns:1fr;text-align:center}
+    .creator-credit{grid-column:1;flex-wrap:wrap;row-gap:5px}
+  }
+</style>
+</head>
+<body>
+
+<nav><div class="wrap">
+  <b>VIBE CODER SIMULATOR</b>
+  <a href="#premise">The game</a><a href="#play">Play now!</a><a href="#world">The world</a>
+  <a href="#people">Meet the cast</a><a href="#cutscene">Reality... Fiction... Or both?</a><a href="#proof">What it is</a><a href="#funding">What backing builds</a><a href="#backing">Back the game</a>
+</div></nav>
+
+<!-- ============ HERO ============ -->
+<header class="hero"><div class="wrap">
+  <div class="hero-copy">
+    <div class="micro">Welcome to Vibe Coder Simulator!</div>
+    <h1>VIBE CODER<br><span>SIMULATOR</span></h1>
+    <div class="tagline">Build your legend. Survive the hype. Change the Valley.</div>
+    <p><b>Vibe Coder Simulator</b> is a role-playing game where you start with
+    a laptop, a free AI trial, and no idea how to code. Meet the world, take on its
+    problems, launch your dream, and
+    grow from a garage founder into the most unforgettable company in tech history!</p>
+    <div class="hero-cta">
+      <a class="btn primary" href="#play">▶ Play the prototype</a>
+      <a class="btn cyan" href="#backing">Help make the full RPG</a>
+    </div>
+    <div class="badges">
+      <span class="badge">PLAY THE PROTOTYPE NOW</span>
+      <span class="badge">STARTUP RPG + COMPANY SIM</span>
+      <span class="badge">AN RPG ABOUT THE VIBE-CODING BOOM</span>
+    </div>
+  </div>
+</div></header>
+
+<!-- ============ PREMISE ============ -->
+<section id="premise"><div class="wrap">
+  <div class="micro">Your new life in the Valley</div>
+  <h2>Become a founder... Who is a vibe coder?!</h2>
+  <p class="lead">You are on a mission to build an empire... Without a tech background?! Walk the garage, meet customers and cofounders, choose which problems
+  matter, and turn plain-language ideas into products. Every launch opens new quests,
+  relationships, locations, rivals, and opportunities — from your first user to demo
+  nights, venture offices, global summits, and the rooms where the future gets decided.</p>
+
+  <div class="grid3">
+    <div class="card"><div class="k">BUILD</div><h3>Turn conversations into software</h3>
+      <p>Interview people, define what the product should do, choose your AI tools, and
+      test the result against the problem that brought them to you.</p></div>
+    <div class="card"><div class="k">GROW</div><h3>Run the company your way</h3>
+      <p>Manage cash, compute, time, customers, teammates, launches, and funding while
+      choosing which opportunities deserve your limited attention.</p></div>
+    <div class="card"><div class="k">LIVE THE STORY</div><h3>Rise through a changing tech world</h3>
+      <p>Build friendships and rivalries as labs, investors, politicians, creators, and
+      customers react to the company you are becoming.</p></div>
+  </div>
+
+  <div class="loop-line">
+    <span class="loop-chip">meet someone</span><span class="loop-chip arrow">→</span>
+    <span class="loop-chip">build with AI</span><span class="loop-chip arrow">→</span>
+    <span class="loop-chip">test the product</span><span class="loop-chip arrow">→</span>
+    <span class="loop-chip">launch it</span><span class="loop-chip arrow">→</span>
+    <span class="loop-chip">grow your company</span><span class="loop-chip arrow">↻</span>
+  </div>
+
+  <div class="plain-rule"><b>The fantasy:</b> begin as an unknown founder in a garage and
+  build the company that reshapes the Valley — without ever writing a line of code?!</div>
+</div></section>
+
+<!-- ============ PLAYABLE ============ -->
+<section id="play"><div class="wrap">
+  <div class="micro">Play Vibe Coder Simulator now</div>
+  <h2>Your first two days as a founder</h2>
+  <p class="lead">A customer needs help and the demo-night clock is running. Choose a
+  station, decide what to build with ORACLE, test the result, use the rest of your day,
+  and decide how to launch. This interactive prototype is the opening taste of the full RPG.</p>
+  <div class="demo-frame">
+    <iframe src="playable-prototype-v5.html" title="Vibe Coder Simulator — playable Day 7/8 slice"></iframe>
+    <div class="demo-note">
+      <p>Choose a station to open its action. Movement is intentionally disabled in this preview.</p>
+      <button class="btn primary" type="button" id="demo-expand" aria-expanded="false">Expand player</button>
+    </div>
+  </div>
+</div></section>
+
+<!-- ============ WORLD ============ -->
+<section id="world"><div class="wrap">
+  <div class="micro">Scope · concept art for the full production</div>
+  <h2>What you see</h2>
+  <p class="lead">The demo above is Day 7 of a planned ~1000-day arc. Everything below is
+  finished scene art for that production — shown as the target, not claimed as the current
+  build. The world produces weather the player navigates: price shocks, picket lines,
+  hearings, chip wars, and the day your favorite model gets a sunset date.</p>
+
+  <div class="grid3">
+    <div class="card"><div class="k">GARAGE LIFE</div><h3>Build for people you can actually meet</h3><p>Customers arrive with specific problems. Coffee shops, pharmacies, demo nights, and cramped workspaces turn those problems into quests you can walk into.</p></div>
+    <div class="card"><div class="k">THE AI GOLD RUSH</div><h3>Ride a market that changes under you</h3><p>Model launches, token and price hikes, product sunsets, viral feeds, compute queues, and investors change which opportunities are possible from one week to the next.</p></div>
+    <div class="card"><div class="k">YOUR PEOPLE</div><h3>Become somebody worth following — or fighting</h3><p>Cofounders have work of their own. Customers remember what shipped. Rivals, creators, lawmakers, and tech titans respond to the company you actually run.</p></div>
+  </div>
+
+  <div class="gallery">
+    <figure class="shot"><img src="assets/scenes/BG-02-the-grind-golden-hour.png" alt="A warm, crowded founder café"><figcaption>THE GRIND — Create, pitch, and do it all over again!</figcaption></figure>
+    <figure class="shot"><img src="assets/scenes/EVT-07-winter-compute-queue.png" alt="Founders waiting through a compute shortage"><figcaption>CREDIT CRUNCH — Are you tokenmaxxing?</figcaption></figure>
+    <figure class="shot"><img src="assets/scenes/BG-18-product-graveyard-day.png" alt="Abandoned product displays overgrown with flowers"><figcaption>PRODUCT GRAVEYARD — Will your darlings survive?</figcaption></figure>
+    <figure class="shot"><img src="assets/scenes/EVT-04-picket-rain.png" alt="AI protesters gathering outside in the rain"><figcaption>THE PICKET — Meet the AI lovers... And those who hate it.</figcaption></figure>
+    <figure class="shot"><img src="assets/scenes/BG-10-googol-arena.png" alt="A vast technology keynote arena"><figcaption>GOOGOL ARENA — Will you reach for the stars?</figcaption></figure>
+    <figure class="shot"><img src="assets/scenes/BG-09-hearing-room-crowd.png" alt="A government hearing room filled with spectators"><figcaption>CAPITOL HILL — What does the government think...?</figcaption></figure>
+    <figure class="shot"><img src="assets/scenes/EVT-01-demo-day-crowd.png" alt="A packed audience watching Demo Day"><figcaption>DEMO DAY — Will you IPO?</figcaption></figure>
+    <figure class="shot"><img src="assets/scenes/founder-vibe-coding/pc-01-dark-night-recovery-v1.png" alt="The Founder working alone late at night"><figcaption>AFTER MIDNIGHT — What will you build when nobody is watching?</figcaption></figure>
+  </div>
+</div></section>
+
+<!-- ============ PEOPLE ============ -->
+<section id="people"><div class="wrap">
+  <div class="micro">A glimpse of the cast and the world ahead</div>
+  <h2>The people we'll meet along the way</h2>
+  <p class="lead">The road from a borrowed garage to an IPO is crowded. You will meet
+  engineers, designers, finance veterans, customers, founders, rivals, investors, and
+  leaders whose ambitions are unfolding at the same time as yours. How will their lives
+  intersect with yours, and how will they remember you?</p>
+
+  <div class="people-grid">
+    <article class="people-card"><div class="people-portrait"><img src="assets/scenes/characters/CAST-21-nadia/cast-21-nadia-bust-v2.png" alt="Nadia Osei holding her green paper ledger"></div>
+      <div class="people-copy"><div class="role">Finance · The fine print shall not escape.</div><h3>Nadia “Books” Osei</h3><p>A veteran finance leader. She knows the company beneath your pretty dashboards and matcha latte showcases better than you know yourself.</p></div></article>
+    <article class="people-card"><div class="people-portrait"><img src="assets/scenes/characters/CAST-23-kai/cast-23-kai-bust-v2.png" alt="Kai, a thoughtful product designer with a sketchbook"></div>
+      <div class="people-copy"><div class="role">Design · Taste is work.</div><h3>Kai</h3><p>A designer. To him, products are never mere “things” — they are art.</p></div></article>
+    <article class="people-card"><div class="people-portrait"><img src="assets/scenes/characters/CAST-24-marcus/cast-24-marcus-bust-v2.png" alt="Marcus Ríos, a precise software engineer"></div>
+      <div class="people-copy"><div class="role">Engineering · A rival.</div><h3>Marcus Ríos</h3><p>He dreams of a vibe-coded world with no bugs, and he will damn well prove it to the world.</p></div></article>
+    <article class="people-card"><div class="people-portrait"><img src="assets/scenes/characters/CAST-22-jules/cast-22-jules-bust-v2.png" alt="Jules, a magnetic community builder"></div>
+      <div class="people-copy"><div class="role">Community · Quintessentially the social butterfly.</div><h3>Jules</h3><p>She knows that people are not numbers, and she won't let you forget it.</p></div></article>
+  </div>
+
+</div></section>
+
+<!-- ============ CUTSCENE ============ -->
+<section id="cutscene"><div class="wrap">
+  <div class="micro">A glimpse beyond the garage</div>
+  <h2>Reality... Fiction... Or both?</h2>
+  <p class="lead">Your journey eventually reaches the biggest rooms in technology. How much of reality will you see here? How much is fiction? Support Vibe Coder Simulator to find out!</p>
+  <div class="scene-shell">
+    <div class="scene" id="scene-stage">
+      <img class="scene-character" id="scene-art" src="assets/scenes/characters/CAST-34-alaric-kade/censored/dialogue/cast-34-alaric-kade-explaining-v1.png" alt="">
+      <div class="scene-box" id="scene-box"></div>
+    </div>
+  </div>
+</div></section>
+
+<!-- ============ ORACLE ============ -->
+<section id="oracle"><div class="wrap">
+  <div class="oracle-showcase">
+    <div class="oracle-art"><img src="assets/generated/AN-02/an-02-v2.png" alt="ORACLE as a luminous guide holding the Founder above a cosmic city"></div>
+    <div class="oracle-copy">
+      <div class="micro">The agent who stays with you</div>
+      <h2>What dream do you want to create?</h2>
+      <p>Whatever your wish, tell it to the ORACLE, that you may summon your heart's desire into the technological world. How far can an idea go, and how far will your imagination take you? Let's discover.</p>
+      <a class="cta" href="#play">Build with ORACLE</a>
+    </div>
+  </div>
+</div></section>
+
+<!-- ============ PLAYABLE PROOF ============ -->
+<section id="proof"><div class="wrap">
+  <div class="micro">The full game</div>
+  <h2>An RPG that simulates... Vibe coding?</h2>
+  <p class="lead">You play a non-technical founder living inside
+  a changing world: explore locations, meet characters, accept quests, build products
+  with AI, assemble a team, raise funding, and decide what kind of company — and person —
+  you become on the way to the top.</p>
+
+  <div class="grid3">
+    <div class="card"><div class="k">FOUNDER RPG</div><h3>Create your own rise</h3><p>Choose projects, allies, rivals, launches, and opportunities across a full founder career that responds to the company you build.</p></div>
+    <div class="card"><div class="k">VIBE-CODING SIM</div><h3>Build through language</h3><p>Turn product conversations into implementation plans, choose AI capabilities, test generated work, and adapt when reality disagrees.</p></div>
+    <div class="card"><div class="k">A LIVING WORLD</div><h3>Explore the culture behind the code</h3><p>Tech celebrities, investors, customers, lawmakers, creators, and coworkers form a world that changes around the company you build.</p></div>
+  </div>
+</div></section>
+
+<!-- ============ WHAT BACKING BUILDS ============ -->
+<section id="funding"><div class="wrap">
+  <div class="micro">From playable proof to the complete RPG</div>
+  <h2>What your backing makes possible</h2>
+  <p class="lead">This vibe-coded prototype demonstrates the daily founder loop. Campaign funding turns
+  that proof into a complete game with a larger world, a full story, stronger production values,
+  the vibe compute, and the testing needed to make every system hold together.</p>
+
+  <div class="grid3">
+    <div class="card"><div class="k">WORLD & STORY</div><h3>Build the Valley beyond the garage</h3><p>More locations, quests, characters, relationships, rivals, company milestones, and authored story events across a full founder career.</p></div>
+    <div class="card"><div class="k">ART, AUDIO & ANIMATION</div><h3>Give the RPG its finished identity</h3><p>Consistent character animation, environmental art, interface polish, original music, sound design, and memorable presentation for major scenes.</p></div>
+    <div class="card"><div class="k">ENGINEERING & PLAYTESTING</div><h3>Make the simulation dependable</h3><p>Expanded product systems, economic balance, accessibility, compatibility testing, save-state reliability, external QA, and repeated player feedback.</p></div>
+  </div>
+
+  <div class="plain-rule"><b>Backing expands a game you can already play.</b> Development grows outward from tested milestones, with public updates showing what was built, what was learned, and what comes next.</div>
+</div></section>
+
+<!-- ============ KICKSTARTER ============ -->
+<section id="backing"><div class="wrap">
+  <div class="micro">Help bring the full game to life</div>
+  <h2>Back Vibe Coder Simulator!</h2>
+  <p class="lead">The playable prototype is the beginning. Your support expands it into
+  a complete founder RPG: a larger world, deeper relationships, more products and AI
+  tools, a full story campaign, original music, and the production polish this idea deserves.</p>
+
+  <div class="ks-grid">
+    <div>
+      <div class="scopebox"><h3>What your backing builds</h3><ul>
+        <li>A complete RPG built outward from the playable prototype</li>
+        <li>A complete story with quests, relationships, rivals, and endings</li>
+        <li>Expanded locations, character animation, UI, sound design, and original music</li>
+        <li>More products, AI tools, company strategies, and world events to discover</li>
+      </ul></div>
+      <div class="scopebox" style="margin-top:12px"><h3>Why back now</h3><ul>
+        <li>Play the core experience right as it is developed!</li>
+        <li>Help shape quests, incidents, balance, and founder life during development</li>
+        <li>Join an early community around a game made for this exact cultural moment</li>
+        <li>Help an original independent RPG reach full production</li>
+      </ul></div>
+      <div class="plain-rule"><b>The prototype proves the idea.</b> Your backing gives the
+      team the time, engineering, art, music, and playtesting needed to build the full adventure.</div>
+    </div>
+    <div>
+      <div class="scopebox"><h3>Backer rewards</h3>
+        <table class="tiers">
+          <tr><td>$5</td><td>Campaign supporter · updates and backer role</td></tr>
+          <tr><td>$20</td><td>Digital game at launch</td></tr>
+          <tr><td>$35</td><td>Game + digital art book + soundtrack</td></tr>
+          <tr><td>$60</td><td>Closed beta access + name in the credits</td></tr>
+          <tr><td>$120</td><td>Limited: your handle appears in the in-game Chirper feed</td></tr>
+          <tr><td>$250</td><td>Limited: workshop a product-board incident with the team</td></tr>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="development">
+    <div class="micro">A campaign you can follow and play</div>
+    <h3>How we build this with you</h3>
+    <p>Backing does not make the game disappear behind a progress bar. Each stage returns as something you can see, play, and respond to.</p>
+    <div class="roadmap">
+      <div class="road-step"><span class="n">01</span><b>Expand the playable world</b><p>New locations, people, quests, and founder-life activities arrive in playable slices.</p></div>
+      <div class="road-step"><span class="n">02</span><b>Deepen the simulation</b><p>Company, relationship, product, and economy systems grow together and are rebalanced through play.</p></div>
+      <div class="road-step"><span class="n">03</span><b>Finish the experience</b><p>Animation, music, sound, accessibility, compatibility, saving, and QA receive dedicated passes.</p></div>
+      <div class="road-step"><span class="n">04</span><b>Show the receipts</b><p>Updates pair each milestone with playable evidence, lessons learned, and the next concrete target.</p></div>
+    </div>
+  </div>
+
+  <div class="plain-rule" style="margin-top:22px"><b>Welcome to Vibe Coder Simulator.</b>
+  Play the prototype today. If you want to explore the Valley, meet the full cast, and
+  build the impossible startup, help us make the complete RPG.</div>
+</div></section>
+
+<footer><div class="wrap">
+  <div>VIBE CODER SIMULATOR · BUILD THE COMPANY. CHANGE THE VALLEY.</div>
+  <div>Play now · follow the launch · help make the full game</div>
+  <div class="creator-credit" aria-label="Creator links">
+    <span>Created by <a href="https://www.victor-tan.com" target="_blank" rel="noopener noreferrer">Victor Tan</a>.</span>
+    <span class="dot" aria-hidden="true">◆</span>
+    <a href="https://www.youtube.com/@VictorTan" target="_blank" rel="noopener noreferrer">YouTube</a>
+    <span class="dot" aria-hidden="true">◆</span>
+    <a href="https://discord.gg/wGKKxUbtvy" target="_blank" rel="noopener noreferrer">Discord</a>
+    <span class="dot" aria-hidden="true">◆</span>
+    <a href="https://buymeacoffee.com/victortanws" target="_blank" rel="noopener noreferrer">Buy me a coffee</a>
+  </div>
+</div></footer>
+
+<script>
+'use strict';
+/* ============ Summit cutscene player ============ */
+const ART = {
+  alaricExplain:'assets/scenes/characters/CAST-34-alaric-kade/censored/dialogue/cast-34-alaric-kade-explaining-v1.png',
+  alaricSmug:'assets/scenes/characters/CAST-34-alaric-kade/censored/reactions/cast-34-alaric-kade-smug-v1.png',
+  alaricAmused:'assets/scenes/characters/CAST-34-alaric-kade/censored/reactions/cast-34-alaric-kade-amused-v1.png',
+  dorianRight:'assets/scenes/characters/CAST-07-dorian/censored/directional/cast-07-dorian-facing-right-v1.png',
+  dorianSkeptical:'assets/scenes/characters/CAST-07-dorian/censored/reactions/cast-07-dorian-reaction-skeptical-v1.png',
+  founderNight:'assets/scenes/founder-vibe-coding/pc-01-dark-night-recovery-v1.png'
+};
+const SCENE = [
+  {art:ART.alaricExplain, speaker:'THE SUMMIT · ACT III · PANEL: “COMPUTE & CONSEQUENCE”', title:'Alaric has the microphone', html:`
+    <p><i>Moderator, off-screen:</i> “…which brings us to infrastructure. Alaric, your firm
+    sells security and surveillance to half the governments in this room. What worries you?”</p>
+    <p><b>ALARIC KADE:</b> “Tokens. Inference. The line item nobody on this stage will say
+    out loud. Every founder out there is bleeding to death on a per-token meter, and the
+    whole industry keeps telling them it’s fine.”</p>`,
+    aside:'Alaric Kade — the philosopher who sells surveillance. You know exactly who he is.'},
+  {art:ART.alaricSmug, speaker:'ALARIC KADE', title:'“Yeah, the token problem is NONSENSE.”', html:`
+    <p><b>ALARIC:</b> “And the way we talk about it? ‘Scale fixes it.’ ‘Prices only go
+    down.’ ‘Don’t model it, vibe it.’ Yeah — the token problem is NONSENSE. The
+    <i>discourse</i>, I mean. Not everyone thinks it's a problem, though.”</p>
+    <p>He turns, delighted, to the man beside him.</p>
+    <p><b>ALARIC:</b> “…Isn’t that right, Dario?”</p>`},
+  {art:ART.dorianSkeptical, speaker:'DORIAN ANTHOS · HALO LABS', title:'“…It’s Dorian.”', html:`
+    <p><b>DORIAN:</b> “…It’s Dorian.”</p>
+    <p>A ten-thousand-word pause.</p>
+    <p><b>DORIAN:</b> “The last time I wrote about token prices,
+    four hundred startups changed their unit economics by morning. Still, words are load-bearing
+    up here. His were, just now.”</p>`,
+    aside:'Dorian Anthos — the lab cofounder whose essays move markets. Every word sincere; every word, the weather.'},
+  {art:ART.founderNight, speaker:'MEANWHILE · ROW 34, SEAT F', title:'The only real number', html:`
+    <p>Three rows from the back, you check your phone under the seat in front.</p>
+    <div class="hud-mock">AI CREDITS: 470 ⚡ · CASH: $675.65 · RUNWAY: 5.6 DAYS</div>
+    <p>You squirm. You wince. A memory surfaces: the app you are building, the bill that never stops ticking. Is he talking directly to you?</p>`},
+  {art:ART.alaricAmused, speaker:'THAT AFTERNOON', title:'Words are load-bearing', html:`
+    <div class="ticker">CHIRPER · @AlaricK token-problem clip — 2.1M views · quote-dunks: 8,140<br>
+    ORACLE CORP BILLING · “Due to geopolitical constraints, inference pricing rises by 50% across the market.”</div>
+    <p>Your AI provider raises prices that afternoon. Tomorrow, you will decide what to cut, who to disappoint, and how to keep building your dream.</p>`,
+    aside:'In Vibe Coder Simulator, the world of tech becomes the world of your RPG.'}
+];
+let sceneIdx = 0;
+const sceneBox = document.getElementById('scene-box');
+const sceneArt = document.getElementById('scene-art');
+const demoFrame = document.querySelector('.demo-frame');
+const demoExpand = document.getElementById('demo-expand');
+function setDemoExpanded(expanded){
+  demoFrame.classList.toggle('expanded', expanded);
+  document.body.classList.toggle('demo-expanded', expanded);
+  demoExpand.setAttribute('aria-expanded', String(expanded));
+  demoExpand.textContent = expanded ? 'Exit expanded player' : 'Expand player';
+}
+demoExpand.onclick = () => setDemoExpanded(!demoFrame.classList.contains('expanded'));
+document.addEventListener('keydown', event => {
+  if(event.key === 'Escape' && demoFrame.classList.contains('expanded')) setDemoExpanded(false);
+});
+function renderScene(){
+  const p = SCENE[sceneIdx], last = sceneIdx === SCENE.length-1;
+  sceneArt.src = p.art;
+  sceneBox.innerHTML = `<div class="speaker">${p.speaker}</div><h4>${p.title}</h4>${p.html}
+    ${p.aside?`<div class="aside">${p.aside}</div>`:''}
+    <div class="scene-actions">
+      ${sceneIdx>0?'<button class="btn" id="scene-back">◂ Back</button>':''}
+      <button class="btn primary" id="scene-fwd">${last?'Replay scene ↺':'Continue ▸'}</button>
+      ${last?'<a class="btn cyan" href="#play">Play what happens next ▸</a>':''}
+    </div>`;
+  const back = document.getElementById('scene-back');
+  if(back) back.onclick = () => {sceneIdx = Math.max(0, sceneIdx-1); renderScene();};
+  document.getElementById('scene-fwd').onclick = () => {sceneIdx = last ? 0 : sceneIdx+1; renderScene();};
+}
+renderScene();
+</script>
+</body>
+</html>
