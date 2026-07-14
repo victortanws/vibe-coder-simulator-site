@@ -386,7 +386,7 @@
   function renderAdvisors() {
     const handwritingDone = hasTest('handwriting');
     const secondDone = hasTest('secondScan');
-    $('play-surface').innerHTML = `${sceneHead('OPTIONAL REVIEW · SAME ARTIFACT, TWO LENSES', 'They disagree about what deserves your next half hour', 'Neither voice supplies a verdict. Each points to evidence you can buy.', null)}
+    $('play-surface').innerHTML = `${sceneHead('OPTIONAL REVIEW · TWO LENSES', 'Two opinions. One test slot.', '', null)}
       <div class="scene-body">
         <div class="advisor-grid">
           <article class="advisor-card">
@@ -572,6 +572,7 @@
   }
 
   function updateStatus() {
+    $('run-kicker').textContent = `TWO-DAY MECHANIC TEST · DAY ${state.day}`;
     $('status-time').textContent = formatTime(state.minutes);
     $('status-cash').textContent = money(state.cash);
     $('status-users').textContent = String(state.users);
