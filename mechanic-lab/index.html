@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0b0f18">
+  <title>Vibe Coder Mechanic Lab</title>
+  <meta name="description" content="A text-first playable experiment for the Vibe Coder Simulator creation loop.">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="lab-shell">
+    <header class="lab-header">
+      <div>
+        <p class="eyebrow">TWO-DAY MECHANIC TEST · DAY 7</p>
+        <h1>Describe. Build. Prove. Ship.</h1>
+      </div>
+      <details class="lab-tools">
+        <summary>Lab tools</summary>
+        <div class="header-actions">
+          <button class="quiet-button" id="copy-log" type="button">Copy run log</button>
+          <button class="quiet-button" id="toggle-debug" type="button" aria-pressed="false">Show state</button>
+          <button class="quiet-button danger" id="reset-run" type="button">Restart</button>
+        </div>
+      </details>
+    </header>
+
+    <section class="status-strip" aria-label="Current resources">
+      <div class="status-item"><span>CASH</span><strong id="status-cash">$560.00</strong></div>
+      <div class="status-item"><span>AI</span><strong id="status-credits">620 ⚡</strong></div>
+      <div class="status-item"><span>FOCUS</span><strong id="status-focus">4/5</strong></div>
+      <div class="status-item"><span>TIME</span><strong id="status-time">09:00</strong></div>
+      <div class="status-item"><span>USERS</span><strong id="status-users">84</strong></div>
+      <span id="status-build" hidden>0.7.4</span>
+      <span id="status-goal" hidden>Understand the incident</span>
+    </section>
+
+    <section class="play-surface" id="play-surface" aria-live="polite"></section>
+
+    <details class="run-notebook">
+      <summary>
+        <span>Notebook</span>
+        <small>Evidence, versions and tests</small>
+      </summary>
+      <div class="notebook-content">
+        <div class="notebook-heading">
+          <div>
+            <p class="eyebrow">OPTIONAL DETAIL</p>
+            <h2>What this run knows</h2>
+          </div>
+          <span class="pulse" aria-hidden="true"></span>
+        </div>
+
+        <section class="notebook-section">
+          <h3>Evidence</h3>
+          <div id="evidence-list" class="notebook-list"></div>
+        </section>
+
+        <section class="notebook-section">
+          <h3>Build history</h3>
+          <div id="build-list" class="notebook-list"></div>
+        </section>
+
+        <section class="notebook-section">
+          <h3>Tests</h3>
+          <div id="test-list" class="notebook-list"></div>
+        </section>
+
+        <details class="debug-panel" id="debug-panel">
+          <summary>Internal deterministic state</summary>
+          <pre id="debug-state"></pre>
+        </details>
+      </div>
+    </details>
+
+    <footer class="lab-footer">
+      <p>Isolated deterministic mechanic test · campaign save unchanged</p>
+      <p><kbd>Tab</kbd> moves · <kbd>Enter</kbd> chooses</p>
+    </footer>
+  </main>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <script src="lab.js"></script>
+</body>
+</html>
