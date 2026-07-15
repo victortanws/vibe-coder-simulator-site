@@ -8,10 +8,14 @@
     night: `${ROOT}/ChatGPT/UI-UX/backgrounds/BG-12/bg-12-dark-night-garage-v1.png`,
     garage: `${ROOT}/ChatGPT/R-assets/pixel-drafts/tilesets/Garage/garage-tileset-tier-2-v1.png`,
     user: `${ROOT}/ChatGPT/R-assets/cast/CAST-28/cast-28-user-0047-embodied-v1.png`,
+    dev: `${ROOT}/ChatGPT/R-assets/cast/CAST-04/cast-04-dev-bust-v1.png`,
     oracle: `${ROOT}/ChatGPT/R-assets/oracle/ORACLE-02/oracle-02-v1.png`,
     founder: `${ROOT}/ChatGPT/R-assets/founder/PC-01a/pc-01a-v2.png`,
     buildScene: `${ROOT}/assets/scenes/founder-vibe-coding/pc-01-vibe-code-first-app-success-v1.png`,
-    founderSprite: `${ROOT}/assets/generated/sprites/PC-01/frames/idle/front-01.png`
+    founderSprite: `${ROOT}/assets/generated/sprites/PC-01/frames/idle/front-01.png`,
+    alaric: `${ROOT}/assets/scenes/characters/CAST-34-alaric-kade/censored/dialogue/cast-34-alaric-kade-explaining-v1.png`,
+    dario: `${ROOT}/assets/scenes/characters/CAST-07-dorian/censored/directional/cast-07-dorian-facing-right-v1.png`,
+    summit: `${ROOT}/assets/scenes/BG-11-summit-table.png`
   });
 
   const ECONOMY = Object.freeze({
@@ -308,9 +312,9 @@
     $('status-line').textContent = 'Customer dialogue · the idea for ClearRead';
   }
 
-  function oracleShell(portrait, alt, copy, pixel = false, portraitClass = '') {
+  function oracleShell(portrait, alt, copy, pixel = false, portraitClass = '', panelClass = '') {
     const portraitMarkup = portrait ? `<img class="portrait${portraitClass ? ` ${portraitClass}` : ''}" src="${portrait}" alt="${escapeHTML(alt)}">` : '';
-    $('surface').innerHTML = `<div class="oracle${portrait ? '' : ' no-portrait'}"><div class="oracle-bg${pixel ? ' pixel' : ''}"></div>${portraitMarkup}<article class="oracle-panel"><div class="copy">${copy}</div></article></div>`;
+    $('surface').innerHTML = `<div class="oracle${portrait ? '' : ' no-portrait'}"><div class="oracle-bg${pixel ? ' pixel' : ''}"></div>${portraitMarkup}<article class="oracle-panel${panelClass ? ` ${panelClass}` : ''}"><div class="copy">${copy}</div></article></div>`;
     $('status-line').textContent = `ORACLE workflow · ${state.oracleStage}`;
   }
 
@@ -342,12 +346,12 @@
     const fixture = FIXTURES[state.fixtureId];
     if (state.fixturePass) {
       const copy = `<p class="eyebrow">SECOND PHOTO · PASSED</p><h1>The new photo gets a new answer.</h1>${result(true, fixture.title, fixture.observed)}<p class="lede"><b>Dev:</b> “Both photos work. Now decide how widely to release this build.”</p>${releaseChoices()}`;
-      oracleShell(null, '', copy, true);
+      oracleShell(ASSETS.dev, 'Dev, the technical cofounder', copy, true, 'dev-portrait');
       return;
     }
     const unsupported = state.unsupportedDiagnosis ? `<div class="unsupported"><b>That does not match what happened.</b><br>${escapeHTML(fixture.unsupported)}</div>` : '';
     const copy = `<p class="eyebrow">SECOND PHOTO · FAILED</p><h1>ClearRead repeated the first dose.</h1>${result(false, fixture.title, fixture.observed)}<div class="trace"><b>What we saw:</b> ${escapeHTML(fixture.cause)}</div><p class="lede"><b>Dev:</b> “The camera was clear. Something from the first scan stayed behind.”</p>${unsupported}<p class="prompt">What went wrong?</p><div class="choices">${fixture.diagnoses.map(item => choice('diagnose', item.label, item.note, item.id)).join('')}</div>`;
-    oracleShell(null, '', copy, true);
+    oracleShell(ASSETS.dev, 'Dev, the technical cofounder', copy, true, 'dev-portrait');
   }
   function renderPatch() {
     const fixture = FIXTURES[state.fixtureId];
@@ -371,8 +375,13 @@
 
   function renderDay8Brief() {
     const selected = DAY8_OPTIONS.find(item => item.id === state.day8Answer);
-    const copy = `<p class="eyebrow">ORACLE · DAY 8 BUILD PLAN</p><h1>Add the offline rule. Keep everything else.</h1>${behaviorList(true)}<div class="added">+ ${escapeHTML(selected.line)}</div><p class="cost">Buy 200 AI Credits for ${money(ECONOMY.day8PackPrice)} · use 200⚡ · 90 minutes · 1 Focus</p><div class="choices">${choice('day8-buy-build', `Buy Credits and build the update · ${money(ECONOMY.day8PackPrice)}`, 'The clinic test runs automatically; all 200 Credits are used.', '', true)}</div>`;
-    oracleShell(ASSETS.founder, 'The confident Founder holding a laptop', copy, true);
+    const copy = `<p class="eyebrow">ORACLE · DAY 8 BUILD PLAN</p><h1>Add one offline rule.</h1><p class="lede">Everything already saved in ClearRead stays in place.</p>${behaviorList(true)}<div class="added">+ ${escapeHTML(selected.line)}</div><p class="cost">Buy 200 AI Credits for ${money(ECONOMY.day8PackPrice)} · use 200⚡ · 90 minutes · 1 Focus</p><div class="choices">${choice('day8-buy-build', `Buy Credits and build the update · ${money(ECONOMY.day8PackPrice)}`, 'The clinic test runs automatically; all 200 Credits are used.', '', true)}${choice('back-day8-question', 'Back to the clinic choices', 'Cancel this plan without spending Cash or Credits.')}</div>`;
+    oracleShell(ASSETS.founder, 'The confident Founder holding a laptop', copy, true, '', 'dense');
+  }
+
+  function renderMarketCutscene() {
+    $('surface').innerHTML = `<section class="market-cutscene" style="--summit:url('${ASSETS.summit}')"><div class="market-shade"></div><img class="market-character alaric" src="${ASSETS.alaric}" alt="Alaric Kade speaking on stage"><img class="market-character dario" src="${ASSETS.dario}" alt="Dario listening to Alaric"><article class="market-dialogue"><p class="eyebrow">LATE NIGHT · COMPUTE & CONSEQUENCE</p><h1>Tomorrow may not cost what today did.</h1><div class="speech"><b>ALARIC</b><p>“Everyone budgets as if tomorrow will resemble today. It rarely does.”</p></div><div class="speech"><b>DARIO</b><p>“Compute prices just moved. The same Credit pack—and every live inference—will cost 50% more tomorrow.”</p></div><div class="speech"><b>ALARIC</b><p>“Then every user turns that headline into part of your bill.”</p></div><div class="choices">${choice('settle-after-cutscene', 'Close Day 7', 'Settle today’s books before the new prices take effect.', '', true)}${choice('return-to-garage', 'Return to Garage HQ', 'Keep the day open a little longer.')}</div></article></section>`;
+    $('status-line').textContent = 'Late-night cutscene · market shock incoming';
   }
 
   function recordMarkup() {
@@ -407,6 +416,7 @@
     if (state.view === 'dialogue') renderDialogue(7);
     else if (state.view === 'oracle') renderOracle();
     else if (state.view === 'record') renderRecord();
+    else if (state.view === 'marketCutscene') renderMarketCutscene();
     else if (state.view === 'settlement') renderSettlement();
     else renderWorld();
   }
@@ -454,6 +464,8 @@
     } else if (actionId === 'day8-answer') {
       if (value === 'defer') { state.day8Deferred = true; log('day8-deferred', 'clinic-offline'); transition('morning'); }
       else { state.day8Answer = value; log('day8-answer', value); transition('oracle', 'day8Brief'); }
+    } else if (actionId === 'back-day8-question') {
+      state.day8Answer = null; transition('oracle', 'day8Question');
     } else if (actionId === 'day8-buy-build') {
       const selected = DAY8_OPTIONS.find(item => item.id === state.day8Answer);
       if (!selected || !buyCredits(state)) { toast('Not enough cash for the Day 8 Credit pack.'); return; }
@@ -461,7 +473,12 @@
     } else if (actionId === 'record') transition('record');
     else if (actionId === 'close-record') transition(state.day === 8 ? 'morning' : 'world');
     else if (actionId === 'end-day') {
+      if (state.day === 7) transition('marketCutscene');
+      else { settleState(state); log('settlement', `cash:${state.cash}`); transition('settlement'); }
+    } else if (actionId === 'settle-after-cutscene') {
       settleState(state); log('settlement', `cash:${state.cash}`); transition('settlement');
+    } else if (actionId === 'return-to-garage') {
+      transition('world');
     } else if (actionId === 'begin-day8') {
       state.day = 8; state.minutes = 540; state.dayOpeningCash = state.cash; transition('oracle', 'day8Question');
     } else if (actionId === 'restart') restart();
