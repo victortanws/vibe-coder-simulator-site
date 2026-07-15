@@ -20,6 +20,7 @@
 .choice:focus-visible,.action:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
 .world-founder.sprite{width:224px;height:280px;image-rendering:pixelated;filter:drop-shadow(0 12px 8px rgba(0,0,0,.45))}
 .portrait.scene-art{align-self:stretch;width:100%;height:100%;object-fit:cover;object-position:44% center;filter:none}
+.dev-line{display:grid;grid-template-columns:48px 1fr;gap:11px;align-items:center;margin-top:13px;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:rgba(18,25,40,.92)}.dev-line img{width:48px;height:48px;object-fit:cover;object-position:50% 20%;border:1px solid rgba(89,224,235,.5);border-radius:9px}.dev-line p{color:var(--muted);font-size:12px;line-height:1.42}.dev-line b{color:var(--text)}
 .text-button{min-height:36px;padding:0 11px;border:1px solid var(--line);border-radius:999px;color:var(--muted);background:rgba(16,22,35,.72)}
 .text-button:hover{border-color:var(--cyan);color:var(--text)}
 .ledger-row.pain{color:#ffe4ad;background:rgba(255,209,93,.06)}

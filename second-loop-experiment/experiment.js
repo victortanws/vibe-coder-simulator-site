@@ -2,8 +2,8 @@
 
 (function () {
   const ROOT = '..';
-  const STORAGE_KEY = 'vcs_second_loop_state_v3';
-  const SCHEMA_VERSION = 3;
+  const STORAGE_KEY = 'vcs_second_loop_state_v4';
+  const SCHEMA_VERSION = 4;
   const ASSETS = Object.freeze({
     night: `${ROOT}/ChatGPT/UI-UX/backgrounds/BG-12/bg-12-dark-night-garage-v1.png`,
     garage: `${ROOT}/ChatGPT/R-assets/pixel-drafts/tilesets/Garage/garage-tileset-tier-2-v1.png`,
@@ -32,44 +32,34 @@
   const DAY8_OPTIONS = Object.freeze([
     { id: 'local', label: 'Run a small model on the phone', note: 'Keep core label reading available offline.', line: 'When the connection drops, read supported labels with the on-device model.' },
     { id: 'decline', label: 'Explain that ClearRead is offline', note: 'Do not attempt a reading without the network.', line: 'When the connection drops, explain that reading is unavailable.' },
-    { id: 'sync', label: 'Save the photo for later', note: 'Queue it only after the user agrees.', line: 'With consent, queue the photo until the connection returns.' }
+    { id: 'defer', label: 'Leave the request open today', note: 'Spend nothing now; the clinic keeps waiting.', line: null }
   ]);
 
   const QUESTIONS = Object.freeze([
-    { id: 'purpose', title: 'What should ClearRead do?', options: [
-      { id: 'exact', label: 'Read exact dosage', note: 'Only when the full line is clear.', line: 'Read the exact dosage when the full line is visible.' },
-      { id: 'fragments', label: 'Read confirmed fragments', note: 'Speak only text it can prove.', line: 'Read only confirmed fragments of the label.' },
-      { id: 'decline', label: 'Refuse and explain', note: 'Name why the image cannot be read.', line: 'Refuse unreadable dosage and explain why.' }
+    { id: 'reading', title: 'What should ClearRead say aloud?', options: [
+      { id: 'exact', label: 'Only a complete dosage', note: 'If glare hides any part, say it cannot read it.', answers: { purpose: 'exact', condition: 'glare' }, lines: ['Read the exact dosage only when the full line is visible.', 'When glare hides any part of the dosage, say it cannot be read.'] },
+      { id: 'fragments', label: 'Only text it can confirm', note: 'Read visible fragments; never fill in hidden text.', answers: { purpose: 'fragments', condition: 'unreadable' }, lines: ['Read only text that is fully visible.', 'When critical text is hidden, never fill in the missing words.'] },
+      { id: 'decline', label: 'Nothing unless the whole label is clear', note: 'Explain what prevented the reading.', answers: { purpose: 'decline', condition: 'medical' }, lines: ['Read a medicine label only when every critical field is clear.', 'When the label is uncertain, explain why no dosage will be spoken.'] }
     ]},
-    { id: 'condition', title: 'When does that rule activate?', options: [
-      { id: 'glare', label: 'Glare crosses dosage', note: 'Narrow to this incident.', line: 'Activate when glare crosses the dosage line.' },
-      { id: 'unreadable', label: 'Key text is unreadable', note: 'Use a broader evidence gate.', line: 'Activate when any critical text is unreadable.' },
-      { id: 'medical', label: 'Medicine-label mode', note: 'Protect this product context.', line: 'Activate for uncertain text in medicine-label mode.' }
-    ]},
-    { id: 'proof', title: 'How will you prove it worked?', options: [
-      { id: 'retake', label: 'Retake shows full dosage', note: 'Prove recovery end to end.', line: 'A fresh photo produces the complete dosage.' },
-      { id: 'silent', label: 'Same photo triggers refusal', note: 'Prove no wrong speech.', line: 'The incident photo produces a clear refusal.' },
-      { id: 'review', label: 'Human review confirms label', note: 'Prove with a second reader.', line: 'A reviewer confirms the dosage before speech.' }
-    ]},
-    { id: 'fallback', title: 'Which fallback should take over?', options: [
-      { id: 'silent', label: 'Stay silent', note: 'Block unproven medicine text.', line: 'When evidence remains uncertain, stay silent rather than guess.' },
-      { id: 'fresh', label: 'Request a fresh scan', note: 'Start again with new evidence.', line: 'When evidence remains uncertain, request a fresh scan.' },
-      { id: 'review', label: 'Ask for human review', note: 'Share only after explicit consent.', line: 'When evidence remains uncertain, offer consent-based human review.' }
+    { id: 'uncertainty', title: 'What should happen when it is unsure?', options: [
+      { id: 'retake', label: 'Ask for a new photo', note: 'Read only after the new photo shows the full dosage.', answers: { proof: 'retake', fallback: 'silent' }, lines: ['A new photo must produce a new reading.', 'Until the dosage is clear, stay silent rather than guess.'] },
+      { id: 'fresh', label: 'Start a fresh scan', note: 'Discard the old photo before trying again.', answers: { proof: 'retake', fallback: 'fresh' }, lines: ['A new photo must start a completely new scan.', 'When the dosage remains unclear, request another fresh photo.'] },
+      { id: 'review', label: 'Offer a person to check it', note: 'Share the photo only after the user agrees.', answers: { proof: 'review', fallback: 'review' }, lines: ['A person must confirm the dosage before ClearRead speaks.', 'Offer human review only after the user agrees to share the photo.'] }
     ]}
   ]);
 
   const FIXTURES = Object.freeze({
     stale: {
-      id: 'stale', title: 'Second-photo session', observed: 'The retake reused the first scan.',
-      cause: 'Recovery changed, but scan memory did not.', correctDiagnosis: 'memory',
+      id: 'stale', title: 'Second photo', observed: 'The clear second photo produced the first photo\'s answer.',
+      cause: 'The second photo was clear, but its answer came from the first scan.', correctDiagnosis: 'memory',
       diagnoses: [
-        { id: 'memory', label: 'Old scan survived', note: 'The retake did not start a fresh session.' },
-        { id: 'camera', label: 'Camera stayed blurred', note: 'The new image may still be unclear.' }
+        { id: 'memory', label: 'ClearRead kept the first photo', note: 'The second photo did not start a new reading.' },
+        { id: 'camera', label: 'The second photo was blurry', note: 'The camera may still have hidden the dose.' }
       ],
-      unsupported: 'Blur does not explain why data from the first scan reappeared.',
+      unsupported: 'That would explain an unclear photo. But this photo was clear, and ClearRead repeated the old answer.',
       patches: [
-        { id: 'clear', label: 'Clear scan memory', note: 'Start every retake from new evidence.', line: 'Start each retake from a fresh scan.' },
-        { id: 'decline', label: 'Decline mixed sessions', note: 'Refuse when scan identity is uncertain.', line: 'Decline when a retake contains mixed scan state.' }
+        { id: 'clear', label: 'Start every photo fresh', note: 'Forget the previous photo before reading the next one.', line: 'Clear the previous photo before reading a new one.' },
+        { id: 'decline', label: 'Stop when two photos get mixed', note: 'Ask the user to begin again.', line: 'If two photos become mixed, stop and request a new scan.' }
       ]
     },
     handwriting: {
@@ -79,7 +69,7 @@
         { id: 'branch', label: 'No handwriting branch', note: 'Different evidence entered one condition.' },
         { id: 'network', label: 'The network was slow', note: 'The request may have timed out.' }
       ],
-      unsupported: 'The trace records a completed rejection, not a network timeout.',
+      unsupported: 'The request finished. A slow connection did not cause the rejection.',
       patches: [
         { id: 'separate', label: 'Separate handwriting', note: 'Check readable handwriting independently.', line: 'Use a separate evidence check for handwriting.' },
         { id: 'print', label: 'Name the supported input', note: 'Limit this release to printed labels.', line: 'Apply this build to printed labels only.' }
@@ -135,8 +125,8 @@
   const money = value => `$${Number(value).toFixed(2)}`;
   const clock = minutes => `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
   const escapeHTML = value => String(value).replace(/[&<>'"]/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[character]));
-  const option = (questionId, answerId) => QUESTIONS.find(question => question.id === questionId)?.options.find(item => item.id === answerId);
-  const chosenLines = answers => QUESTIONS.map(question => option(question.id, answers[question.id])?.line).filter(Boolean);
+  const selectedOption = (question, answers) => question.options.find(item => Object.entries(item.answers).every(([key, value]) => answers[key] === value));
+  const chosenLines = answers => QUESTIONS.flatMap(question => selectedOption(question, answers)?.lines || []);
 
   function deriveAdjacent(answers) {
     if (answers.proof === 'retake' && answers.fallback !== 'fresh') return FIXTURES.stale;
@@ -174,7 +164,7 @@
       credits: ECONOMY.credits, focus: ECONOMY.focus, answers: {}, taps: 0,
       fixtureId: null, fixturePass: null, unsupportedDiagnosis: null,
       diagnosis: null, patch: null, settledDays: {}, settlements: [], purchases: [],
-      dayOpeningCash: ECONOMY.openingCash, day8Answer: null, day8Update: null,
+      dayOpeningCash: ECONOMY.openingCash, day8Answer: null, day8Update: null, day8Deferred: false,
       product: {
         name: 'ClearRead', createdByPlayer: false, version: null, behaviors: [], implementationBoundary: null,
         evidence: [], release: null, futureScenarios: []
@@ -283,7 +273,7 @@
     if (!state.product.version) {
       return `<aside class="world-card product-card"><p class="eyebrow">YOUR FIRST APP</p><h2>ClearRead · not built yet</h2><div class="product-status"><div class="status-row"><span>Problem from</span><b>USER_0047</b></div><div class="status-row"><span>Build</span><b>Empty project</b></div><div class="status-row"><span>Next</span><b>Create it with ORACLE</b></div></div></aside>`;
     }
-    return `<aside class="world-card product-card"><p class="eyebrow">${release ? 'ACTIVE PRODUCT' : 'YOUR FIRST APP'}</p><h2>ClearRead ${escapeHTML(state.product.version)}</h2><div class="product-status"><div class="status-row"><span>Created by</span><b>The Founder</b></div><div class="status-row"><span>Evidence</span><b>${state.product.evidence.length}/${state.day8Update ? 3 : 2} fixtures</b></div><div class="status-row"><span>Release</span><b>${release ? escapeHTML(release.label) : 'Needs a fix'}</b></div><div class="status-row"><span>Market result</span><b class="pending">${release ? 'Pending' : '—'}</b></div></div></aside>`;
+    return `<aside class="world-card product-card"><p class="eyebrow">${release ? 'ACTIVE PRODUCT' : 'YOUR FIRST APP'}</p><h2>ClearRead ${escapeHTML(state.product.version)}</h2><div class="product-status"><div class="status-row"><span>Created by</span><b>The Founder</b></div><div class="status-row"><span>Photos tested</span><b>${state.product.evidence.length}</b></div><div class="status-row"><span>Release</span><b>${release ? escapeHTML(release.label) : 'Not released'}</b></div><div class="status-row"><span>Market result</span><b class="pending">${release ? 'Pending' : '—'}</b></div></div></aside>`;
   }
 
   function renderWorld() {
@@ -292,34 +282,31 @@
     // current day so a Day 8 receipt never sits over Day 7 copy.
     const morning = state.day === 8;
     const day8Done = Boolean(state.day8Update);
-    const needsTopUp = state.day === 7 ? state.credits < 120 : state.credits < COSTS.day8Update.credits;
-    const heading = morning ? day8Done ? 'The second build is recorded.' : 'The clinic is waiting.' : released ? 'Back in the garage.' : 'Build your first app.';
+    const heading = morning ? day8Done ? 'The clinic stays covered.' : state.day8Deferred ? 'The clinic request is still open.' : 'The clinic is waiting.' : released ? 'Back in the garage.' : 'Build your first app.';
     const body = morning
       ? day8Done
-        ? `ClearRead ${state.product.version} now carries yesterday's behaviors and today's offline rule. Its market response remains pending.`
-        : `ClearRead ${state.product.version} is still active. Westside Clinic needs it to work when the connection drops.`
+        ? `ClearRead ${state.product.version} kept yesterday's rules and passed the Westside Clinic outage test. Its market response remains pending.`
+        : state.day8Deferred
+          ? 'You spent nothing on the outage request. Westside Clinic will ask again tomorrow.'
+          : `ClearRead ${state.product.version} is still active. Westside Clinic needs it to work when the connection drops.`
       : released
         ? `ClearRead ${state.product.version} is recorded. Its market result is pending, and the rest of Day 7 is still yours.`
         : 'USER_0047 brought you a real problem. You have an empty project and a name for it: ClearRead.';
-    const topUp = action('buy-credits', `Buy ${ECONOMY.creditPack} AI Credits · ${money(creditPackPrice(state.day))}`, state.day === 8 ? 'The same pack now costs 50% more cash.' : 'Enough capacity to build, test and revise.', 'buy-credits');
     const actions = morning
-      ? day8Done
+      ? day8Done || state.day8Deferred
         ? `${action('record', 'Open company record', 'See both saved product passes.', 'primary')}${action('end-day', 'End Day 8', 'Close the second day when you choose.', 'end-day')}`
-        : `${needsTopUp ? topUp : ''}${action('enter-day8-oracle', 'Build the offline update', `${COSTS.day8Update.minutes} minutes · ${COSTS.day8Update.credits}⚡ · ${COSTS.day8Update.focus} Focus`, 'primary', needsTopUp)}`
+        : `${action('enter-day8-oracle', 'Answer the clinic', 'Choose whether to update ClearRead today.', 'primary')}`
       : released
         ? `${action('record', 'Open company record', 'Review the active build and pending exposure.', 'primary')}${action('end-day', 'End Day 7', 'Close the books when you choose.', 'end-day')}`
-        : `${needsTopUp ? topUp : ''}${action('enter-oracle', 'Enter ORACLE Studio', 'Define, build, test and record a release.', 'primary', needsTopUp)}`;
+        : `${action('enter-oracle', 'Enter ORACLE Studio', 'Decide how ClearRead should behave.', 'primary')}`;
     $('surface').innerHTML = `<div class="world"><div class="world-bg"></div><div class="world-shade"></div><div class="world-grid"><section class="world-card"><p class="eyebrow">${morning ? 'GARAGE HQ · DAY 8' : 'GARAGE HQ · DAY 7'}</p><h1>${heading}</h1><p class="lede">${escapeHTML(body)}</p><div class="world-actions">${actions}</div></section><img class="world-founder sprite" src="${ASSETS.founderSprite}" alt="The Founder standing in the pixel-art garage">${worldProductCard()}</div></div>`;
     $('status-line').textContent = morning ? 'Day 8 · carried company state' : released ? 'Garage HQ · release pending' : 'Garage HQ · choose a station';
   }
 
   function renderDialogue(day = state.day) {
-    const day8 = day === 8;
-    const copy = day8
-      ? `<p class="eyebrow">08:42 · WESTSIDE CLINIC</p><h1>“The Wi-Fi dropped again.”</h1><div class="messages"><div class="message"><b>USER_0047</b> · The clinic is using the ClearRead app you built.</div><div class="message">When the connection vanished, fourteen patients lost label reading with it.</div></div><p class="lede">Yesterday's build is still live. Today, the same compute pack costs 50% more.</p><div class="choices">${choice('continue-day8', 'Take the call', 'Return to the garage with this new problem.', '', true)}</div>`
-      : `<p class="eyebrow">23:58 · YOUR FIRST CUSTOMER</p><h1>“The box says half.”</h1><div class="messages"><div class="message"><b>USER_0047</b> · Grandma started new blood-pressure pills. The glossy label looked like it said two.</div><div class="message">Could you build something that reads it aloud—and refuses when it cannot see the whole dose?</div></div><p class="lede">Back in the garage, you name the idea ClearRead. This will be your first app.</p><div class="choices">${choice('continue-customer', 'Build ClearRead', 'Take her problem back to your garage.', '', true)}</div>`;
+    const copy = `<p class="eyebrow">23:58 · YOUR FIRST CUSTOMER</p><h1>“The box says half.”</h1><div class="messages"><div class="message"><b>USER_0047</b> · Grandma started new blood-pressure pills. The glossy label looked like it said two.</div><div class="message">Could you build something that reads it aloud—and refuses when it cannot see the whole dose?</div></div><p class="lede">You name the idea ClearRead. This will be your first app.</p><div class="choices">${choice('continue-customer', 'Design ClearRead', 'Tell ORACLE exactly how it should respond.', '', true)}</div>`;
     oracleShell(ASSETS.user, 'USER_0047, the customer who inspires ClearRead', copy);
-    $('status-line').textContent = day8 ? 'Customer dialogue · Day 8' : 'Customer dialogue · the idea for ClearRead';
+    $('status-line').textContent = 'Customer dialogue · the idea for ClearRead';
   }
 
   function oracleShell(portrait, alt, copy, pixel = false, portraitClass = '') {
@@ -330,70 +317,61 @@
   function renderQuestion() {
     const question = QUESTIONS[state.question];
     const first = state.question === 0;
-    const copy = `<p class="eyebrow">ORACLE · QUESTION ${state.question + 1} OF 4</p><h1>${escapeHTML(question.title)}</h1>${first ? '<p class="lede">Turn the customer\'s incident into observable product behavior.</p>' : ''}<div class="choices">${question.options.map(item => choice('answer', item.label, item.note, item.id)).join('')}</div>`;
+    const copy = `<p class="eyebrow">ORACLE · DECISION ${state.question + 1} OF 2</p><h1>${escapeHTML(question.title)}</h1>${first ? '<p class="lede">Choose what a customer should actually hear and see.</p>' : ''}<div class="choices">${question.options.map(item => choice('answer', item.label, item.note, item.id)).join('')}</div>`;
     oracleShell(ASSETS.oracle, 'ORACLE', copy, true);
   }
 
   function renderBrief() {
-    const copy = `<p class="eyebrow">ORACLE · EXACT READBACK</p><h1>This is what I’ll build.</h1>${behaviorList()}<p class="cost">60 minutes · 80⚡ · 1 Focus</p><div class="choices">${choice('build', 'Create ClearRead', 'Generate and save your first app as 0.1.0.', '', true)}</div>`;
+    const copy = `<p class="eyebrow">ORACLE · BUILD PLAN</p><h1>ClearRead will follow these four rules.</h1>${behaviorList()}<p class="cost">Buy 200 AI Credits for ${money(ECONOMY.day7PackPrice)} · use 80⚡ · 60 minutes · 1 Focus</p><div class="choices">${choice('buy-build', `Buy Credits and create ClearRead · ${money(ECONOMY.day7PackPrice)}`, '200 Credits added; 80 used for this build.', '', true)}</div>`;
     oracleShell(ASSETS.oracle, 'ORACLE', copy, true);
   }
   function renderBuild() {
-    const copy = `<p class="eyebrow">FIRST BUILD SAVED · 0.1.0</p><h1>You created ClearRead.</h1><p class="lede">Your exact four behaviors are now software. Replay the customer’s photograph before anyone relies on it.</p>${behaviorList()}<div class="choices">${choice('test-incident', 'Replay customer photo', '30 minutes · 20⚡', '', true)}</div>`;
+    const copy = `<p class="eyebrow">FIRST BUILD SAVED · 0.1.0</p><h1>You created ClearRead.</h1><p class="lede">ClearRead now follows the four rules you chose. Try it on the photo that started this.</p>${behaviorList()}<div class="choices">${choice('test-incident', 'Try the customer’s photo', '30 minutes · 20⚡', '', true)}</div>`;
     oracleShell(ASSETS.buildScene, 'The Founder confidently creating ClearRead at a laptop', copy, false, 'scene-art');
   }
   function renderIncident() {
     const observed = state.answers.purpose === 'decline' ? 'ClearRead refused and explained the glare.' : state.answers.proof === 'review' ? 'ClearRead held speech for a reviewer.' : state.answers.purpose === 'fragments' ? 'ClearRead spoke only confirmed text.' : 'ClearRead withheld the hidden dosage.';
-    const copy = `<p class="eyebrow">EVIDENCE · REPORTED PHOTO</p><h1>The incident closes.</h1>${result(true, 'Glossy dosage line', observed)}<p class="lede">Now test the nearest condition the saved brief did not establish.</p><div class="choices">${choice('test-adjacent', 'Test the adjacent case', '30 minutes · 20⚡', '', true)}</div>`;
+    const copy = `<p class="eyebrow">FIRST PHOTO · PASSED</p><h1>It handles the original photo.</h1>${result(true, 'Customer’s glossy label', observed)}<div class="dev-line"><img src="${ASSETS.dev}" alt="Dev"><p><b>Dev:</b> “The first photo worked. I want to try a second, clear photo. A new photo should never reuse the old answer.”</p></div><div class="choices">${choice('test-second-photo', 'Try the second photo', '30 minutes · 20⚡', '', true)}${choice('release-one-test', 'Release after one test', 'Save time; repeat scans remain untested.')}</div>`;
     oracleShell(ASSETS.user, 'USER_0047', copy);
+  }
+  function releaseChoices() {
+    const tested = state.product.evidence.length > 1 ? 'both tested photos' : 'the one tested photo';
+    return `<div class="scope"><span>TESTED · ${escapeHTML(tested)}</span><span>NOT TESTED · other photos and settings</span></div><div class="choices">${choice('release', 'Release only where it was tested', 'Keep this build inside the conditions that worked.', 'evidence')}${choice('release', 'Release to the wider market', 'Let more people use it before those situations are tested.', 'wide')}</div>`;
   }
   function renderAdjacent() {
     const fixture = FIXTURES[state.fixtureId];
     if (state.fixturePass) {
-      const copy = `<p class="eyebrow">EVIDENCE · ADJACENT CASE</p><h1>The boundary holds.</h1>${result(true, fixture.title, fixture.observed)}<p class="lede"><b>Dev:</b> “Two fixtures. Same saved build.”</p><div class="choices">${choice('open-release', 'Record a release', 'Choose where this build can travel.', '', true)}</div>`;
+      const copy = `<p class="eyebrow">SECOND PHOTO · PASSED</p><h1>The new photo gets a new answer.</h1>${result(true, fixture.title, fixture.observed)}<p class="lede"><b>Dev:</b> “Both photos work. Now decide how widely to release this build.”</p>${releaseChoices()}`;
       oracleShell(ASSETS.dev, 'Dev, the technical cofounder', copy, true);
       return;
     }
-    const unsupported = state.unsupportedDiagnosis ? `<div class="unsupported"><b>That does not fit the trace.</b><br>${escapeHTML(fixture.unsupported)}</div>` : '';
-    const copy = `<p class="eyebrow">EVIDENCE · ADJACENT CASE</p><h1>Why did this fail?</h1>${result(false, fixture.title, fixture.observed)}<div class="trace"><b>Trace:</b> ${escapeHTML(fixture.cause)}</div>${unsupported}<p class="prompt">Choose the cause supported by the trace.</p><div class="choices">${fixture.diagnoses.map(item => choice('diagnose', item.label, item.note, item.id)).join('')}</div>`;
+    const unsupported = state.unsupportedDiagnosis ? `<div class="unsupported"><b>That does not match what happened.</b><br>${escapeHTML(fixture.unsupported)}</div>` : '';
+    const copy = `<p class="eyebrow">SECOND PHOTO · FAILED</p><h1>ClearRead repeated the first dose.</h1>${result(false, fixture.title, fixture.observed)}<div class="trace"><b>What we saw:</b> ${escapeHTML(fixture.cause)}</div><div class="dev-line"><img src="${ASSETS.dev}" alt="Dev"><p><b>Dev:</b> “The camera was clear. Something from the first scan stayed behind.”</p></div>${unsupported}<p class="prompt">What went wrong?</p><div class="choices">${fixture.diagnoses.map(item => choice('diagnose', item.label, item.note, item.id)).join('')}</div>`;
     oracleShell(ASSETS.dev, 'Dev, the technical cofounder', copy, true);
   }
   function renderPatch() {
     const fixture = FIXTURES[state.fixtureId];
     const diagnosis = fixture.diagnoses.find(item => item.id === state.diagnosis);
-    const copy = `<p class="eyebrow">ORACLE · FOCUSED REVISION</p><h1>Add the missing boundary.</h1><p class="lede">Diagnosis: ${escapeHTML(diagnosis.label)}. All four chosen behaviors remain saved.</p><div class="choices">${fixture.patches.map(item => choice('patch', item.label, item.note, item.id)).join('')}</div>`;
+    const copy = `<p class="eyebrow">ORACLE · FIX THE REPEAT SCAN</p><h1>How should ClearRead start a new photo?</h1><p class="lede">You found the problem: ${escapeHTML(diagnosis.label)}. The original four rules will stay unchanged.</p><div class="choices">${fixture.patches.map(item => choice('patch', item.label, item.note, item.id)).join('')}</div>`;
     oracleShell(ASSETS.oracle, 'ORACLE', copy, true);
   }
   function renderRevised() {
     const fixture = FIXTURES[state.fixtureId];
-    const copy = `<p class="eyebrow">REGRESSION SUITE · 0.1.1</p><h1>Both fixtures pass.</h1>${result(true, 'Glossy dosage line', 'The customer’s photo now closes safely.')}${result(true, fixture.title, state.product.implementationBoundary)}<div class="preserved">4/4 CHOSEN BEHAVIORS PRESERVED</div><div class="added">+ ${escapeHTML(state.product.implementationBoundary)}</div><div class="choices">${choice('open-release', 'Record a release', 'Choose where this build can travel.', '', true)}</div>`;
+    const copy = `<p class="eyebrow">BOTH PHOTOS TESTED · 0.1.1</p><h1>Both photos now work.</h1>${result(true, 'Original glossy label', 'ClearRead follows the rules you chose.')}${result(true, fixture.title, 'ClearRead forgets the first photo before reading the second.')}<div class="preserved">THE FOUR CHOSEN RULES STAYED INTACT</div><div class="added">+ ${escapeHTML(state.product.implementationBoundary)}</div>${releaseChoices()}`;
     oracleShell(ASSETS.oracle, 'ORACLE', copy, true);
   }
   function renderRelease() {
-    const fixture = FIXTURES[state.fixtureId];
-    const copy = `<p class="eyebrow">RELEASE · ${state.product.version}</p><h1>Where can this build travel?</h1><div class="scope"><span>PROVED · glossy label</span><span>PROVED · ${escapeHTML(fixture.title)}</span><span>UNTESTED · other contexts</span></div><div class="choices">${choice('release', 'Evidence-matched release', 'Use only the conditions proved here.', 'evidence')}${choice('release', 'Wider-market release', 'Allow future scenarios from untested contexts.', 'wide')}</div>`;
+    const copy = `<p class="eyebrow">RELEASE · ${state.product.version}</p><h1>How widely should ClearRead launch?</h1><p class="lede">One customer photo worked. You chose not to check whether a second photo starts a fresh reading.</p>${releaseChoices()}`;
     oracleShell(ASSETS.founder, 'The Founder in an orange hoodie', copy, true);
   }
-  function renderPending() {
-    const release = state.product.release;
-    const copy = `<p class="eyebrow">RELEASE RECORDED · OUTCOME PENDING</p><h1>Product work is complete.</h1><div class="record"><strong>${escapeHTML(release.label)} · ${state.product.version}</strong><span>${clock(state.minutes)} · 2/2 fixtures held</span><p>The build and release scope are saved. No market result has been invented or applied.</p></div><div class="garage-return">Garage HQ still has the rest of your day. Settlement will happen only if you choose End Day.</div><div class="choices">${choice('return-garage', 'Return to Garage HQ', 'Carry this exact company state with you.', '', true)}</div>`;
-    oracleShell(ASSETS.founder, 'The Founder in an orange hoodie', copy, true);
-  }
-
   function renderDay8Question() {
-    const copy = `<p class="eyebrow">ORACLE · DAY 8 UPDATE</p><h1>What should ClearRead do offline?</h1><p class="lede">Choose one observable behavior for the clinic's connection failures.</p><div class="choices">${DAY8_OPTIONS.map(item => choice('day8-answer', item.label, item.note, item.id)).join('')}</div>`;
+    const copy = `<p class="eyebrow">08:42 · WESTSIDE CLINIC</p><h1>“The Wi-Fi dropped again.”</h1><div class="messages"><div class="message">Fourteen patients lost label reading when the clinic's connection failed.</div></div><p class="lede">Choose what ClearRead should do without a connection—or leave this request for another day.</p><div class="choices">${DAY8_OPTIONS.map(item => choice('day8-answer', item.label, item.note, item.id)).join('')}</div>`;
     oracleShell(ASSETS.oracle, 'ORACLE', copy, true);
   }
 
   function renderDay8Brief() {
     const selected = DAY8_OPTIONS.find(item => item.id === state.day8Answer);
-    const copy = `<p class="eyebrow">ORACLE · UPDATE READBACK</p><h1>Add one behavior. Keep the rest.</h1>${behaviorList(true)}<div class="added">+ ${escapeHTML(selected.line)}</div><p class="cost">90 minutes · 200⚡ · 1 Focus</p><div class="choices">${choice('day8-build', 'Build and replay the outage', 'Generate ClearRead 0.2.0 and test it at the clinic.', '', true)}</div>`;
-    oracleShell(ASSETS.founder, 'The confident Founder holding a laptop', copy, true);
-  }
-
-  function renderDay8Result() {
-    const selected = DAY8_OPTIONS.find(item => item.id === state.day8Answer);
-    const copy = `<p class="eyebrow">OUTAGE REPLAY · 0.2.0</p><h1>The clinic stays covered.</h1>${result(true, 'Connection lost', selected.line)}<div class="preserved">DAY 7 BUILD PRESERVED · DAY 8 RULE ADDED</div><div class="choices">${choice('day8-record', 'Record the Day 8 update', 'Return to Garage HQ with the result still pending.', '', true)}</div>`;
+    const copy = `<p class="eyebrow">ORACLE · DAY 8 BUILD PLAN</p><h1>Add the offline rule. Keep everything else.</h1>${behaviorList(true)}<div class="added">+ ${escapeHTML(selected.line)}</div><p class="cost">Buy 200 AI Credits for ${money(ECONOMY.day8PackPrice)} · use 200⚡ · 90 minutes · 1 Focus</p><div class="choices">${choice('day8-buy-build', `Buy Credits and build the update · ${money(ECONOMY.day8PackPrice)}`, 'The clinic test runs automatically; all 200 Credits are used.', '', true)}</div>`;
     oracleShell(ASSETS.founder, 'The confident Founder holding a laptop', copy, true);
   }
 
@@ -421,13 +399,12 @@
   }
 
   function renderOracle() {
-    const views = { question: renderQuestion, brief: renderBrief, build: renderBuild, incident: renderIncident, adjacent: renderAdjacent, patch: renderPatch, revised: renderRevised, release: renderRelease, pending: renderPending, day8Question: renderDay8Question, day8Brief: renderDay8Brief, day8Result: renderDay8Result };
+    const views = { question: renderQuestion, brief: renderBrief, build: renderBuild, incident: renderIncident, adjacent: renderAdjacent, patch: renderPatch, revised: renderRevised, release: renderRelease, day8Question: renderDay8Question, day8Brief: renderDay8Brief };
     (views[state.oracleStage] || renderQuestion)();
   }
   function render() {
     renderHud();
     if (state.view === 'dialogue') renderDialogue(7);
-    else if (state.view === 'day8Dialogue') renderDialogue(8);
     else if (state.view === 'oracle') renderOracle();
     else if (state.view === 'record') renderRecord();
     else if (state.view === 'settlement') renderSettlement();
@@ -438,56 +415,55 @@
     state.view = view; state.oracleStage = stage; log('stage', stage || view); commit();
   }
   function handle(actionId, value) {
+    if (actionId !== 'restart') state.taps += 1;
     if (actionId === 'continue-customer') {
-      transition('world');
-    } else if (actionId === 'continue-day8') {
-      transition('morning');
-    } else if (actionId === 'buy-credits') {
-      if (!buyCredits(state)) { toast('Not enough cash for this Credit pack.'); return; }
-      log('credit-purchase', `${ECONOMY.creditPack}:${creditPackPrice(state.day)}`); commit(); toast(`${ECONOMY.creditPack} AI Credits added`);
+      state.question = 0; transition('oracle', 'question');
     } else if (actionId === 'enter-oracle') {
       state.question = 0; transition('oracle', 'question');
     } else if (actionId === 'enter-day8-oracle') {
       transition('oracle', 'day8Question');
     } else if (actionId === 'answer') {
-      const question = QUESTIONS[state.question]; state.answers[question.id] = value; state.taps += 1; log('answer', `${question.id}:${value}`);
+      const question = QUESTIONS[state.question];
+      const selected = question.options.find(item => item.id === value);
+      if (!selected) { toast('Choose one of the available responses.'); return; }
+      Object.assign(state.answers, selected.answers); log('answer', `${question.id}:${value}`);
       if (state.question < QUESTIONS.length - 1) { state.question += 1; state.oracleStage = 'question'; commit(); }
       else transition('oracle', 'brief');
-    } else if (actionId === 'build') {
-      state.taps += 1; spend(COSTS.build); saveInitialBuild(state); log('build', '0.1.0'); transition('oracle', 'build');
+    } else if (actionId === 'buy-build') {
+      if (!buyCredits(state)) { toast('Not enough cash for the Credit pack.'); return; }
+      spend(COSTS.build); saveInitialBuild(state); log('credit-purchase', `${ECONOMY.creditPack}:${creditPackPrice(state.day)}`); log('build', '0.1.0'); transition('oracle', 'build');
     } else if (actionId === 'test-incident') {
-      state.taps += 1; spend(COSTS.test); state.product.evidence = [{ id: 'glossy', label: 'Glossy dosage line', result: 'pass' }]; log('test', 'glossy:pass'); transition('oracle', 'incident');
-    } else if (actionId === 'test-adjacent') {
-      state.taps += 1; spend(COSTS.test); const fixture = deriveAdjacent(state.answers); state.fixtureId = fixture.id; state.fixturePass = fixture.id === 'clean'; if (state.fixturePass) state.product.evidence.push({ id: fixture.id, label: fixture.title, result: 'pass' }); log('test', `${fixture.id}:${state.fixturePass ? 'pass' : 'fail'}`); transition('oracle', 'adjacent');
+      spend(COSTS.test); state.product.evidence = [{ id: 'glossy', label: 'Customer’s glossy label', result: 'pass' }]; log('test', 'glossy:pass'); transition('oracle', 'incident');
+    } else if (actionId === 'test-second-photo') {
+      spend(COSTS.test); const fixture = deriveAdjacent(state.answers); state.fixtureId = fixture.id; state.fixturePass = fixture.id === 'clean'; if (state.fixturePass) state.product.evidence.push({ id: fixture.id, label: fixture.title, result: 'pass' }); log('test', `${fixture.id}:${state.fixturePass ? 'pass' : 'fail'}`); transition('oracle', 'adjacent');
+    } else if (actionId === 'release-one-test') {
+      state.fixtureId = null; state.fixturePass = null; log('test-declined', 'second-photo'); transition('oracle', 'release');
     } else if (actionId === 'diagnose') {
-      state.taps += 1; const fixture = FIXTURES[state.fixtureId]; log('diagnosis', `${fixture.id}:${value}`);
+      const fixture = FIXTURES[state.fixtureId]; log('diagnosis', `${fixture.id}:${value}`);
       if (value !== fixture.correctDiagnosis) { state.unsupportedDiagnosis = value; commit(); }
       else { state.diagnosis = value; state.unsupportedDiagnosis = null; transition('oracle', 'patch'); }
     } else if (actionId === 'patch') {
-      state.taps += 1;
-      if (!applyPatch(state, value)) { toast('That patch is not supported by the diagnosis.'); return; }
+      if (!applyPatch(state, value)) { toast('That change does not match the problem you found.'); return; }
       spend(COSTS.revise); spend(COSTS.test); log('patch', `${state.fixtureId}:${value}`); log('retest', 'glossy:pass'); log('retest', `${state.fixtureId}:pass`); transition('oracle', 'revised');
-    } else if (actionId === 'open-release') {
-      state.taps += 1; transition('oracle', 'release');
     } else if (actionId === 'release') {
-      state.taps += 1; const fixture = FIXTURES[state.fixtureId]; const label = value === 'wide' ? 'Wider-market release' : 'Evidence-matched release'; state.product.release = { scope: value, label, status: 'pending', day: state.day, build: state.product.version }; state.product.futureScenarios = futureScenarioPool(value, fixture.title); log('release', `${value}:${state.product.version}`); transition('oracle', 'pending');
-    } else if (actionId === 'return-garage') {
-      state.taps += 1; transition('world');
+      const fixture = state.fixtureId ? FIXTURES[state.fixtureId] : null;
+      const label = value === 'wide' ? 'Wider-market release' : 'Tested-conditions release';
+      state.product.release = { scope: value, label, status: 'pending', day: state.day, build: state.product.version };
+      state.product.futureScenarios = futureScenarioPool(value, fixture?.title || 'repeat scans');
+      log('release', `${value}:${state.product.version}`); transition('world'); toast('Release recorded · market result pending');
     } else if (actionId === 'day8-answer') {
-      state.taps += 1; state.day8Answer = value; log('day8-answer', value); transition('oracle', 'day8Brief');
-    } else if (actionId === 'day8-build') {
+      if (value === 'defer') { state.day8Deferred = true; log('day8-deferred', 'clinic-offline'); transition('morning'); }
+      else { state.day8Answer = value; log('day8-answer', value); transition('oracle', 'day8Brief'); }
+    } else if (actionId === 'day8-buy-build') {
       const selected = DAY8_OPTIONS.find(item => item.id === state.day8Answer);
-      if (!selected || state.credits < COSTS.day8Update.credits) { toast('Top up AI Credits before building.'); return; }
-      state.taps += 1; spend(COSTS.day8Update); state.product.version = '0.2.0'; state.product.behaviors.push(selected.line); state.product.evidence.push({ id: 'offline', label: 'Westside Clinic outage', result: 'pass' }); log('day8-build', selected.id); transition('oracle', 'day8Result');
-    } else if (actionId === 'day8-record') {
-      const selected = DAY8_OPTIONS.find(item => item.id === state.day8Answer);
-      state.taps += 1; state.day8Update = { behavior: selected.line, status: 'pending', build: '0.2.0' }; state.product.release.build = '0.2.0'; log('day8-release', selected.id); transition('morning');
+      if (!selected || !buyCredits(state)) { toast('Not enough cash for the Day 8 Credit pack.'); return; }
+      spend(COSTS.day8Update); state.product.version = '0.2.0'; state.product.behaviors.push(selected.line); state.product.evidence.push({ id: 'offline', label: 'Westside Clinic outage', result: 'pass' }); state.day8Update = { behavior: selected.line, status: 'pending', build: '0.2.0' }; if (state.product.release) state.product.release.build = '0.2.0'; log('credit-purchase', `${ECONOMY.creditPack}:${creditPackPrice(state.day)}`); log('day8-build', selected.id); transition('morning'); toast('ClearRead 0.2.0 passed the clinic outage test');
     } else if (actionId === 'record') transition('record');
     else if (actionId === 'close-record') transition(state.day === 8 ? 'morning' : 'world');
     else if (actionId === 'end-day') {
       settleState(state); log('settlement', `cash:${state.cash}`); transition('settlement');
     } else if (actionId === 'begin-day8') {
-      state.day = 8; state.minutes = 540; state.dayOpeningCash = state.cash; transition('day8Dialogue');
+      state.day = 8; state.minutes = 540; state.dayOpeningCash = state.cash; transition('oracle', 'day8Question');
     } else if (actionId === 'restart') restart();
   }
 
