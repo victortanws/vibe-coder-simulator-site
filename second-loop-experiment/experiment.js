@@ -11,7 +11,6 @@
     oracle: `${ROOT}/ChatGPT/R-assets/oracle/ORACLE-02/oracle-02-v1.png`,
     founder: `${ROOT}/ChatGPT/R-assets/founder/PC-01a/pc-01a-v2.png`,
     buildScene: `${ROOT}/assets/scenes/founder-vibe-coding/pc-01-vibe-code-first-app-success-v1.png`,
-    dev: `${ROOT}/ChatGPT/R-assets/cast/CAST-04/cast-04-dev-bust-v1.png`,
     founderSprite: `${ROOT}/assets/generated/sprites/PC-01/frames/idle/front-01.png`
   });
 
@@ -310,7 +309,8 @@
   }
 
   function oracleShell(portrait, alt, copy, pixel = false, portraitClass = '') {
-    $('surface').innerHTML = `<div class="oracle"><div class="oracle-bg${pixel ? ' pixel' : ''}"></div><img class="portrait${portraitClass ? ` ${portraitClass}` : ''}" src="${portrait}" alt="${escapeHTML(alt)}"><article class="oracle-panel"><div class="copy">${copy}</div></article></div>`;
+    const portraitMarkup = portrait ? `<img class="portrait${portraitClass ? ` ${portraitClass}` : ''}" src="${portrait}" alt="${escapeHTML(alt)}">` : '';
+    $('surface').innerHTML = `<div class="oracle${portrait ? '' : ' no-portrait'}"><div class="oracle-bg${pixel ? ' pixel' : ''}"></div>${portraitMarkup}<article class="oracle-panel"><div class="copy">${copy}</div></article></div>`;
     $('status-line').textContent = `ORACLE workflow · ${state.oracleStage}`;
   }
 
@@ -331,7 +331,7 @@
   }
   function renderIncident() {
     const observed = state.answers.purpose === 'decline' ? 'ClearRead refused and explained the glare.' : state.answers.proof === 'review' ? 'ClearRead held speech for a reviewer.' : state.answers.purpose === 'fragments' ? 'ClearRead spoke only confirmed text.' : 'ClearRead withheld the hidden dosage.';
-    const copy = `<p class="eyebrow">FIRST PHOTO · PASSED</p><h1>It handles the original photo.</h1>${result(true, 'Customer’s glossy label', observed)}<div class="dev-line"><img src="${ASSETS.dev}" alt="Dev"><p><b>Dev:</b> “The first photo worked. I want to try a second, clear photo. A new photo should never reuse the old answer.”</p></div><div class="choices">${choice('test-second-photo', 'Try the second photo', '30 minutes · 20⚡', '', true)}${choice('release-one-test', 'Release after one test', 'Save time; repeat scans remain untested.')}</div>`;
+    const copy = `<p class="eyebrow">FIRST PHOTO · PASSED</p><h1>It handles the original photo.</h1>${result(true, 'Customer’s glossy label', observed)}<div class="dev-line"><p><b>Dev:</b> “The first photo worked. I want to try a second, clear photo. A new photo should never reuse the old answer.”</p></div><div class="choices">${choice('test-second-photo', 'Try the second photo', '30 minutes · 20⚡', '', true)}${choice('release-one-test', 'Release after one test', 'Save time; repeat scans remain untested.')}</div>`;
     oracleShell(ASSETS.user, 'USER_0047', copy);
   }
   function releaseChoices() {
@@ -342,12 +342,12 @@
     const fixture = FIXTURES[state.fixtureId];
     if (state.fixturePass) {
       const copy = `<p class="eyebrow">SECOND PHOTO · PASSED</p><h1>The new photo gets a new answer.</h1>${result(true, fixture.title, fixture.observed)}<p class="lede"><b>Dev:</b> “Both photos work. Now decide how widely to release this build.”</p>${releaseChoices()}`;
-      oracleShell(ASSETS.dev, 'Dev, the technical cofounder', copy, true);
+      oracleShell(null, '', copy, true);
       return;
     }
     const unsupported = state.unsupportedDiagnosis ? `<div class="unsupported"><b>That does not match what happened.</b><br>${escapeHTML(fixture.unsupported)}</div>` : '';
     const copy = `<p class="eyebrow">SECOND PHOTO · FAILED</p><h1>ClearRead repeated the first dose.</h1>${result(false, fixture.title, fixture.observed)}<div class="trace"><b>What we saw:</b> ${escapeHTML(fixture.cause)}</div><p class="lede"><b>Dev:</b> “The camera was clear. Something from the first scan stayed behind.”</p>${unsupported}<p class="prompt">What went wrong?</p><div class="choices">${fixture.diagnoses.map(item => choice('diagnose', item.label, item.note, item.id)).join('')}</div>`;
-    oracleShell(ASSETS.dev, 'Dev, the technical cofounder', copy, true);
+    oracleShell(null, '', copy, true);
   }
   function renderPatch() {
     const fixture = FIXTURES[state.fixtureId];
