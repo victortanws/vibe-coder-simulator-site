@@ -250,7 +250,7 @@
 
   function renderHud() {
     $('hud').innerHTML = `<span class="day">DAY ${state.day}</span><b>${clock(state.minutes)}</b><span class="cash">${money(state.cash)}</span><span class="credits">${state.credits}⚡</span><span class="focus">${state.focus}/5 Focus</span>`;
-    const phaseIndex = state.view === 'oracle' ? 0 : state.view === 'settlement' || state.view === 'morning' ? 2 : state.product.release ? 1 : 0;
+    const phaseIndex = state.view === 'oracle' || state.view === 'dialogue' || state.view === 'day8Dialogue' ? 0 : state.view === 'settlement' ? 2 : 1;
     $('phase').innerHTML = ['Product work', 'Garage HQ', 'End Day'].map((label, index) => `<span title="${label}" class="${index < phaseIndex ? 'done' : index === phaseIndex ? 'active' : ''}"></span>`).join('');
   }
 
@@ -348,7 +348,7 @@
   function renderPatch() {
     const fixture = FIXTURES[state.fixtureId];
     const diagnosis = fixture.diagnoses.find(item => item.id === state.diagnosis);
-    const copy = `<p class="eyebrow">ORACLE · FOCUSED REVISION</p><h1>Add the missing boundary.</h1><p class="lede">Diagnosis: ${escapeHTML(diagnosis.label)}. All four chosen behaviors remain saved.</p><div class="choices">${fixture.patches.map((item, index) => choice('patch', item.label, item.note, item.id, index === 0)).join('')}</div>`;
+    const copy = `<p class="eyebrow">ORACLE · FOCUSED REVISION</p><h1>Add the missing boundary.</h1><p class="lede">Diagnosis: ${escapeHTML(diagnosis.label)}. All four chosen behaviors remain saved.</p><div class="choices">${fixture.patches.map(item => choice('patch', item.label, item.note, item.id)).join('')}</div>`;
     oracleShell(ASSETS.oracle, 'ORACLE', copy, true);
   }
   function renderRevised() {
@@ -358,7 +358,7 @@
   }
   function renderRelease() {
     const fixture = FIXTURES[state.fixtureId];
-    const copy = `<p class="eyebrow">RELEASE · ${state.product.version}</p><h1>Where can this build travel?</h1><div class="scope"><span>PROVED · glossy label</span><span>PROVED · ${escapeHTML(fixture.title)}</span><span>UNTESTED · other contexts</span></div><div class="choices">${choice('release', 'Evidence-matched release', 'Use only the conditions proved here.', 'evidence', true)}${choice('release', 'Wider-market release', 'Allow future scenarios from untested contexts.', 'wide')}</div>`;
+    const copy = `<p class="eyebrow">RELEASE · ${state.product.version}</p><h1>Where can this build travel?</h1><div class="scope"><span>PROVED · glossy label</span><span>PROVED · ${escapeHTML(fixture.title)}</span><span>UNTESTED · other contexts</span></div><div class="choices">${choice('release', 'Evidence-matched release', 'Use only the conditions proved here.', 'evidence')}${choice('release', 'Wider-market release', 'Allow future scenarios from untested contexts.', 'wide')}</div>`;
     oracleShell(ASSETS.founder, 'The Founder in an orange hoodie', copy, true);
   }
   function renderPending() {
