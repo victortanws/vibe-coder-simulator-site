@@ -58,11 +58,11 @@
     },
     {
       id: 'guardrail',
-      title: 'What must it never do?',
+      title: 'Which fallback should take over?',
       options: [
-        { id: 'noGuess', label: 'Speak uncertain dosage', note: 'Block an unproven result.', line: 'Never speak an uncertain dosage.' },
-        { id: 'freshScan', label: 'Reuse an old scan', note: 'Keep each attempt separate.', line: 'Never reuse a previous scan for a retake.' },
-        { id: 'consent', label: 'Send without consent', note: 'Keep human review opt-in.', line: 'Never send a label without user consent.' }
+        { id: 'noGuess', label: 'Stay silent', note: 'Block unproven medicine text.', line: 'When evidence remains uncertain, stay silent rather than guess.' },
+        { id: 'freshScan', label: 'Request a fresh scan', note: 'Start again with new evidence.', line: 'When evidence remains uncertain, request a fresh scan.' },
+        { id: 'consent', label: 'Ask for human review', note: 'Share only after explicit consent.', line: 'When evidence remains uncertain, offer consent-based human review.' }
       ]
     }
   ]);
@@ -147,7 +147,7 @@
       day: 7, minutes: 540, cash: ECONOMY.openingCash, users: ECONOMY.users,
       credits: ECONOMY.credits, focus: ECONOMY.focus, buildVersion: null,
       incidentTested: false, fixture: null, fixturePass: null, diagnosis: null,
-      patch: null, releaseScope: null, settled: false, taps: 0,
+      patch: null, regressionPassed: false, releaseScope: null, settled: false, taps: 0,
       startedAt: now(), stageStartedAt: now(), events: [], maxWords: 0
     };
   }
@@ -161,7 +161,9 @@
   }
 
   function chosenLines(answers, effectiveLines = {}) {
-    return QUESTIONS.map(question => effectiveLines[question.id] || option(question.id, answers[question.id])?.line).filter(Boolean);
+    const lines = QUESTIONS.map(question => effectiveLines[question.id] || option(question.id, answers[question.id])?.line).filter(Boolean);
+    if (effectiveLines.implementationBoundary) lines.push(effectiveLines.implementationBoundary);
+    return lines;
   }
 
   function evaluateIncident(answers) {
@@ -184,7 +186,18 @@
   function applyPatch(lines, fixture, patchId) {
     const patch = fixture.patches.find(item => item[0] === patchId);
     if (!patch) return null;
-    return { target: fixture.target, title: patch[1], detail: patch[2], line: patch[3], lines: Object.assign({}, lines, { [fixture.target]: patch[3] }) };
+    return {
+      target: 'implementationBoundary', sourceTarget: fixture.target,
+      title: patch[1], detail: patch[2], line: patch[3],
+      lines: Object.assign({}, lines, { implementationBoundary: patch[3] })
+    };
+  }
+
+  function retestResults(fixture, patch) {
+    return [
+      { id: 'glossy', title: 'Glossy dosage line', observed: 'The original incident still closes.', pass: Boolean(patch) },
+      { id: fixture.id, title: fixture.title, observed: patch?.line || fixture.observed, pass: Boolean(patch) }
+    ];
   }
 
   function approvedSettlement() {
@@ -221,6 +234,7 @@
       expectedTaps: expectedTapCount(Boolean(state.patch)), maxVisibleWords: state.maxWords,
       answers: state.answers, fixture: state.fixture?.id || null, fixturePass: state.fixturePass,
       diagnosis: state.diagnosis, patch: state.patch?.title || null,
+      regressionPassed: state.regressionPassed,
       releaseScope: state.releaseScope, finalCash: state.cash, users: state.users,
       events: state.events
     };
@@ -229,7 +243,6 @@
   function setScene(background, portrait, alt, position = 'center') {
     $('scene-art').style.backgroundImage = `url("${background}")`;
     $('scene-art').style.backgroundPosition = position;
-    $('scene-art').setAttribute('aria-label', alt || '');
     const image = $('portrait');
     if (portrait) { image.src = portrait; image.alt = alt || ''; image.hidden = false; }
     else { image.hidden = true; image.removeAttribute('src'); image.alt = ''; }
@@ -263,7 +276,7 @@
   }
 
   function briefMarkup(changedTarget = '') {
-    return `<div class="brief"><div class="brief-head"><span>SAVED BEHAVIOR</span><span class="version">${state.buildVersion || 'DRAFT'}</span></div><ol class="behavior-lines">${chosenLines(state.answers, state.effectiveLines).map((line, index) => `<li class="${QUESTIONS[index].id === changedTarget ? 'changed' : ''}">${escapeHTML(line)}</li>`).join('')}</ol></div>`;
+    return `<div class="brief"><div class="brief-head"><span>SAVED BEHAVIOR</span><span class="version">${state.buildVersion || 'DRAFT'}</span></div><ol class="behavior-lines">${chosenLines(state.answers, state.effectiveLines).map((line, index) => `<li class="${(QUESTIONS[index]?.id || 'implementationBoundary') === changedTarget ? 'changed' : ''}">${escapeHTML(line)}</li>`).join('')}</ol></div>`;
   }
 
   function renderBrief() {
@@ -290,22 +303,23 @@
     const fixture = state.fixture;
     setScene(ASSETS.garage, ASSETS.dev, 'Dev', 'center');
     if (state.fixturePass) {
-      $('decision-panel').innerHTML = `<div class="copy-zone"><p class="eyebrow">EVIDENCE · ADJACENT FIXTURE</p><h1>The boundary holds.</h1>${resultMarkup(true, fixture.title, fixture.observed)}<div class="dev-line"><img src="${ASSETS.dev}" alt="Dev"><p><b>Dev:</b> “Two fixtures. Same saved brief. No hidden score.”</p></div><div class="choices">${choice('open-release', 'Record a release', 'Choose evidence scope.', '', true)}</div></div>`;
+      $('decision-panel').innerHTML = `<div class="copy-zone"><p class="eyebrow">EVIDENCE · ADJACENT FIXTURE</p><h1>The boundary holds.</h1>${resultMarkup(true, fixture.title, fixture.observed)}<div class="dev-line"><img src="${ASSETS.dev}" alt="" aria-hidden="true"><p><b>Dev:</b> “Two fixtures. Same saved brief. No hidden score.”</p></div><div class="choices">${choice('open-release', 'Record a release', 'Choose evidence scope.', '', true)}</div></div>`;
       return;
     }
-    $('decision-panel').innerHTML = `<div class="copy-zone"><p class="eyebrow">EVIDENCE · ADJACENT FIXTURE</p><h1>A boundary breaks.</h1>${resultMarkup(false, fixture.title, fixture.observed)}<div class="cause"><b>Trace:</b> ${escapeHTML(fixture.cause)}</div><div class="dev-line"><img src="${ASSETS.dev}" alt="Dev"><p><b>Dev:</b> “The build followed the brief. Diagnose the missing boundary.”</p></div><div class="choices">${fixture.diagnoses.map(item => choice('diagnose', item[1], item[2], item[0])).join('')}</div></div>`;
+    $('decision-panel').innerHTML = `<div class="copy-zone"><p class="eyebrow">EVIDENCE · ADJACENT FIXTURE</p><h1>A boundary breaks.</h1>${resultMarkup(false, fixture.title, fixture.observed)}<div class="cause"><b>Trace:</b> ${escapeHTML(fixture.cause)}</div><div class="dev-line"><img src="${ASSETS.dev}" alt="" aria-hidden="true"><p><b>Dev:</b> “The build followed the brief. Diagnose the missing boundary.”</p></div><div class="choices">${fixture.diagnoses.map(item => choice('diagnose', item[1], item[2], item[0])).join('')}</div></div>`;
   }
 
   function renderPatch() {
     const fixture = state.fixture;
     const diagnosis = fixture.diagnoses.find(item => item[0] === state.diagnosis);
     setScene(ASSETS.garage, ASSETS.oracle, 'ORACLE', '35% center');
-    $('decision-panel').innerHTML = `<div class="copy-zone"><p class="eyebrow">ORACLE · FOCUSED REVISION</p><h1>Change one boundary.</h1><p class="lede">Diagnosis: ${escapeHTML(diagnosis[1])}. The other three behavior lines stay saved.</p><div class="choices">${fixture.patches.map(item => choice('apply-patch', item[1], item[2], item[0], item[0] === 'support')).join('')}</div></div>`;
+    $('decision-panel').innerHTML = `<div class="copy-zone"><p class="eyebrow">ORACLE · FOCUSED REVISION</p><h1>Add the missing boundary.</h1><p class="lede">Diagnosis: ${escapeHTML(diagnosis[1])}. All four chosen behaviors stay saved.</p><div class="choices">${fixture.patches.map(item => choice('apply-patch', item[1], item[2], item[0], item[0] === 'support')).join('')}</div></div>`;
   }
 
   function renderRevised() {
     setScene(ASSETS.garage, ASSETS.oracle, 'ORACLE', '35% center');
-    $('decision-panel').innerHTML = `<div class="copy-zone"><p class="eyebrow">RETESTED · ${state.buildVersion}</p><h1>Red becomes green.</h1>${resultMarkup(true, state.fixture.title, state.patch.line)}<div class="diff"><span class="diff-label">ONE-LINE PATCH</span><div class="red-green"><div>${escapeHTML(option(state.patch.target, state.answers[state.patch.target]).line)}</div><span>→</span><div>${escapeHTML(state.patch.line)}</div></div></div>${briefMarkup(state.patch.target)}<div class="choices">${choice('open-release', 'Record a release', 'Choose evidence scope.', '', true)}</div></div>`;
+    const results = retestResults(state.fixture, state.patch);
+    $('decision-panel').innerHTML = `<div class="copy-zone"><p class="eyebrow">REGRESSION SUITE · ${state.buildVersion}</p><h1>Both fixtures pass.</h1>${results.map(result => resultMarkup(result.pass, result.title, result.observed)).join('')}<div class="diff"><span class="diff-label">4/4 CHOSEN BEHAVIORS PRESERVED</span><div class="added-line"><b>+</b><span>${escapeHTML(state.patch.line)}</span></div></div><div class="choices">${choice('open-release', 'Record a release', 'Choose evidence scope.', '', true)}</div></div>`;
   }
 
   function renderRelease() {
@@ -394,7 +408,7 @@
       state.diagnosis = id; log('diagnosis', `${state.fixture.id}:${id}`); transition('patch');
     } else if (action === 'apply-patch') {
       const result = applyPatch(state.effectiveLines, state.fixture, id);
-      state.patch = result; state.effectiveLines = result.lines; state.buildVersion = '0.7.6'; spend(COSTS.revise); spend(COSTS.test); state.fixturePass = true; log('patch', `${state.fixture.id}:${id}`); log('retest', `${state.fixture.id}:pass`); transition('revised');
+      state.patch = result; state.effectiveLines = result.lines; state.buildVersion = '0.7.6'; spend(COSTS.revise); spend(COSTS.test); state.fixturePass = true; state.regressionPassed = true; log('patch', `${state.fixture.id}:${id}`); log('retest', 'glossy:pass'); log('retest', `${state.fixture.id}:pass`); transition('revised');
     } else if (action === 'open-release') {
       transition('release');
     } else if (action === 'release') {
@@ -435,7 +449,7 @@
     log('start', 'first-loop-01'); render();
   }
 
-  const api = { ASSETS, ECONOMY, COSTS, QUESTIONS, FIXTURES, freshState, chosenLines, evaluateIncident, deriveAdjacent, applyPatch, approvedSettlement, expectedTapCount, wordCount };
+  const api = { ASSETS, ECONOMY, COSTS, QUESTIONS, FIXTURES, freshState, chosenLines, evaluateIncident, deriveAdjacent, applyPatch, retestResults, approvedSettlement, expectedTapCount, wordCount };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   if (typeof window !== 'undefined') window.__firstLoopExperiment = { getState: () => state, runSummary, restart, mechanics: api };
   if (typeof document !== 'undefined') document.addEventListener('DOMContentLoaded', boot);
