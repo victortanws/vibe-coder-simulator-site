@@ -263,11 +263,11 @@
   function choice(actionId, label, note, value = '', primary = false) {
     return `<button type="button" class="choice${primary ? ' primary' : ''}" data-action="${actionId}"${value ? ` data-value="${escapeHTML(value)}"` : ''}><strong>${escapeHTML(label)}</strong><small>${escapeHTML(note)}</small></button>`;
   }
-  function behaviorList(includeBoundary = false) {
+  function behaviorList(includeBoundary = false, versionLabel = null) {
     const lines = state.product.behaviors.length ? state.product.behaviors : chosenLines(state.answers);
     const items = lines.map(line => `<li>${escapeHTML(line)}</li>`);
     if (includeBoundary && state.product.implementationBoundary) items.push(`<li class="added">${escapeHTML(state.product.implementationBoundary)}</li>`);
-    return `<div class="brief"><div class="brief-head"><span>SAVED BEHAVIOR</span><b>${state.product.version || 'DRAFT'}</b></div><ol class="behavior">${items.join('')}</ol></div>`;
+    return `<div class="brief"><div class="brief-head"><span>SAVED BEHAVIOR</span><b>${escapeHTML(versionLabel || state.product.version || 'DRAFT')}</b></div><ol class="behavior">${items.join('')}</ol></div>`;
   }
   function result(pass, title, observed) {
     return `<div class="result${pass ? '' : ' fail'}"><span>${pass ? '✓' : '×'}</span><div><strong>${escapeHTML(title)}</strong><small>${escapeHTML(observed)}</small></div></div>`;
@@ -325,7 +325,7 @@
   }
 
   function renderBrief() {
-    const copy = `<p class="eyebrow">ORACLE · REPAIR PLAN</p><h1>These four rules will repair ClearRead.</h1>${behaviorList()}<p class="cost">Buy 200 AI Credits for ${money(ECONOMY.day7PackPrice)} · use 80⚡ · 60 minutes · 1 Focus</p><div class="choices">${choice('buy-build', `Buy Credits and build the repair · ${money(ECONOMY.day7PackPrice)}`, '200 Credits added; 80 used for this build.', '', true)}</div>`;
+    const copy = `<p class="eyebrow">ORACLE · REPAIR PLAN</p><h1>These four rules will repair ClearRead.</h1>${behaviorList(false, 'DRAFT')}<p class="cost">Buy 200 AI Credits for ${money(ECONOMY.day7PackPrice)} · use 80⚡ · 60 minutes · 1 Focus</p><div class="choices">${choice('buy-build', `Buy Credits and build the repair · ${money(ECONOMY.day7PackPrice)}`, '200 Credits added; 80 used for this build.', '', true)}</div>`;
     oracleShell(ASSETS.oracle, 'ORACLE', copy, true);
   }
   function renderBuild() {
