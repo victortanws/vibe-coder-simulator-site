@@ -246,7 +246,10 @@
       return parsed?.schema === SCHEMA_VERSION && parsed.product ? parsed : freshState();
     } catch (_) { return freshState(); }
   }
-  function commit() { save(); render(); }
+  function resetViewport() {
+    if (typeof window !== 'undefined' && typeof window.scrollTo === 'function') window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+  }
+  function commit() { save(); render(); resetViewport(); }
   function spend(cost) { state.minutes += cost.minutes; state.credits -= cost.credits; state.focus -= cost.focus; }
 
   function renderHud() {
@@ -490,6 +493,7 @@
   }
   function restart() {
     state = freshState(); log('start', 'second-loop-03'); render(); save();
+    resetViewport();
     if (typeof localStorage !== 'undefined') {
       try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (_) {}
     }
