@@ -288,7 +288,9 @@
 
   function renderWorld() {
     const released = Boolean(state.product.release);
-    const morning = state.view === 'morning';
+    // Settlement is layered over the garage. Derive its backdrop from the
+    // current day so a Day 8 receipt never sits over Day 7 copy.
+    const morning = state.day === 8;
     const day8Done = Boolean(state.day8Update);
     const needsTopUp = state.day === 7 ? state.credits < 120 : state.credits < COSTS.day8Update.credits;
     const heading = morning ? day8Done ? 'The second build is recorded.' : 'The clinic is waiting.' : released ? 'Back in the garage.' : 'Build your first app.';
