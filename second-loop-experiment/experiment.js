@@ -14,7 +14,7 @@
     buildScene: `${ROOT}/assets/scenes/founder-vibe-coding/pc-01-vibe-code-first-app-success-v1.png`,
     founderSprite: `${ROOT}/assets/generated/sprites/PC-01/frames/idle/front-01.png`,
     alaric: `${ROOT}/assets/scenes/characters/CAST-34-alaric-kade/censored/dialogue/cast-34-alaric-kade-explaining-v1.png`,
-    dario: `${ROOT}/assets/scenes/characters/CAST-07-dorian/censored/directional/cast-07-dorian-facing-right-v1.png`,
+    dorian: `${ROOT}/assets/scenes/characters/CAST-07-dorian/censored/directional/cast-07-dorian-facing-right-v1.png`,
     summit: `${ROOT}/assets/scenes/BG-11-summit-table.png`
   });
 
@@ -54,72 +54,99 @@
   const FIXTURES = Object.freeze({
     stale: {
       id: 'stale', title: 'Second photo', observed: 'The clear second photo produced the first photo\'s answer.',
-      cause: 'The second photo was clear, but its answer came from the first scan.', correctDiagnosis: 'memory',
+      testLabel: 'Try a second clear photo',
+      devSetup: 'The first photo worked. Let’s try a second clear photo. A new photo should never reuse the first answer.',
+      failureTitle: 'ClearRead reused the first photo’s answer.',
+      cause: 'The second photo was clear, but ClearRead gave the exact answer from the first one.',
+      devFinding: 'The new photo was clear. ClearRead must still be holding on to the old one.',
+      patchEyebrow: 'ORACLE · FIX THE REPEAT SCAN', patchTitle: 'How should ClearRead start a new photo?', correctDiagnosis: 'memory',
       diagnoses: [
         { id: 'memory', label: 'ClearRead kept the first photo', note: 'The second photo did not start a new reading.' },
         { id: 'camera', label: 'The second photo was blurry', note: 'The camera may still have hidden the dose.' }
       ],
       unsupported: 'That would explain an unclear photo. But this photo was clear, and ClearRead repeated the old answer.',
       patches: [
-        { id: 'clear', label: 'Start every photo fresh', note: 'Forget the previous photo before reading the next one.', line: 'Clear the previous photo before reading a new one.' },
-        { id: 'decline', label: 'Stop when two photos get mixed', note: 'Ask the user to begin again.', line: 'If two photos become mixed, stop and request a new scan.' }
+        { id: 'clear', label: 'Start every photo fresh', note: 'Forget the previous photo before reading the next one.', line: 'Clear the previous photo before reading a new one.', success: 'ClearRead clears the first photo before reading the second.' },
+        { id: 'decline', label: 'Stop when two photos get mixed', note: 'Ask the user to begin again.', line: 'If two photos become mixed, stop and request a new scan.', success: 'ClearRead detects the mix and asks the user to begin again.' }
       ]
     },
     handwriting: {
-      id: 'handwriting', title: 'Readable handwriting', observed: 'The broad gate rejected a readable note.',
-      cause: 'Printed labels and handwriting entered one evidence gate.', correctDiagnosis: 'branch',
+      id: 'handwriting', title: 'Readable handwriting', observed: 'ClearRead rejected a note that a person could read.',
+      testLabel: 'Try a handwritten label',
+      devSetup: 'You told ClearRead to speak text it can confirm. Let’s find out whether readable handwriting counts—or whether this repair only understands printed labels.',
+      failureTitle: 'ClearRead rejected readable handwriting.',
+      cause: 'The note was readable, but ClearRead judged it by the printed-label rule and rejected it.',
+      devFinding: 'The words are clear. The problem is that handwriting was sent through a rule meant for printed labels.',
+      patchEyebrow: 'ORACLE · HANDLE HANDWRITING', patchTitle: 'How should ClearRead treat readable handwriting?', correctDiagnosis: 'branch',
       diagnoses: [
-        { id: 'branch', label: 'No handwriting branch', note: 'Different evidence entered one condition.' },
-        { id: 'network', label: 'The network was slow', note: 'The request may have timed out.' }
+        { id: 'branch', label: 'Handwriting needs its own check', note: 'Do not judge a readable note like a damaged printed label.' },
+        { id: 'network', label: 'The connection failed', note: 'The request may not have completed.' }
       ],
-      unsupported: 'The request finished. A slow connection did not cause the rejection.',
+      unsupported: 'The request did complete and returned a rejection. That rules out an interrupted connection; ClearRead used the wrong rule for this kind of text.',
       patches: [
-        { id: 'separate', label: 'Separate handwriting', note: 'Check readable handwriting independently.', line: 'Use a separate evidence check for handwriting.' },
-        { id: 'print', label: 'Name the supported input', note: 'Limit this release to printed labels.', line: 'Apply this build to printed labels only.' }
+        { id: 'separate', label: 'Check handwriting separately', note: 'Let readable handwriting use its own check.', line: 'Use a separate evidence check for handwriting.', success: 'Readable handwriting now follows its own check.' },
+        { id: 'print', label: 'Support printed labels only', note: 'Explain that handwriting is outside this release.', line: 'Apply this build to printed labels only.', success: 'ClearRead now explains that this build supports printed labels only.' }
       ]
     },
     consent: {
       id: 'consent', title: 'After-hours review', observed: 'The photo entered a review queue automatically.',
-      cause: 'Human review had no consent boundary.', correctDiagnosis: 'permission',
+      testLabel: 'Check review permission',
+      devSetup: 'This repair can send a photo to a person for help. Let’s make sure the user chooses whether that photo leaves their device.',
+      failureTitle: 'ClearRead shared the photo without asking.',
+      cause: 'The image was sent before the user agreed to share it.',
+      devFinding: 'The reviewer received the photo. The user was never asked for permission.',
+      patchEyebrow: 'ORACLE · ASK BEFORE SHARING', patchTitle: 'What should happen before a photo is sent for review?', correctDiagnosis: 'permission',
       diagnoses: [
         { id: 'permission', label: 'Permission was missing', note: 'The user never chose to share the image.' },
         { id: 'hours', label: 'The reviewer was offline', note: 'The queue may have been closed.' }
       ],
       unsupported: 'Availability does not explain why the image was shared automatically.',
       patches: [
-        { id: 'ask', label: 'Ask before review', note: 'Make sharing an explicit choice.', line: 'Request consent before human review.' },
-        { id: 'local', label: 'Keep the photo local', note: 'Decline instead of sharing automatically.', line: 'Decline locally unless the user requests review.' }
+        { id: 'ask', label: 'Ask before review', note: 'Make sharing an explicit choice.', line: 'Request consent before human review.', success: 'ClearRead asks before sending a photo for review.' },
+        { id: 'local', label: 'Keep the photo local', note: 'Decline instead of sharing automatically.', line: 'Decline locally unless the user requests review.', success: 'ClearRead keeps the photo local unless the user requests review.' }
       ]
     },
     fragments: {
       id: 'fragments', title: 'Split dosage line', observed: 'Confirmed fragments formed an incomplete dose.',
-      cause: 'Each fragment was certain; their combination was not.', correctDiagnosis: 'assembly',
+      testLabel: 'Try a split dosage line',
+      devSetup: 'This repair can speak fragments it recognizes. Let’s make sure separate fragments never become a misleading dosage.',
+      failureTitle: 'ClearRead spoke an incomplete dosage.',
+      cause: 'ClearRead confirmed each fragment but never checked whether the complete dosage was present.',
+      devFinding: 'The words it found were right, but the spoken dosage was still missing its unit.',
+      patchEyebrow: 'ORACLE · REQUIRE A COMPLETE DOSAGE', patchTitle: 'What must ClearRead confirm before speaking?', correctDiagnosis: 'assembly',
       diagnoses: [
         { id: 'assembly', label: 'Fragments were combined', note: 'Certainty did not survive composition.' },
         { id: 'volume', label: 'Speech was too quiet', note: 'The user may not have heard the unit.' }
       ],
       unsupported: 'Volume cannot restore a unit that the assembled result omitted.',
       patches: [
-        { id: 'complete', label: 'Require a complete field', note: 'Keep number and unit together.', line: 'Read a dosage only when its full field is confirmed.' },
-        { id: 'visual', label: 'Keep fragments visual', note: 'Do not speak a partial dose.', line: 'Display fragments, but do not speak a partial dosage.' }
+        { id: 'complete', label: 'Require the complete dosage', note: 'Keep the number and unit together.', line: 'Read a dosage only when its full field is confirmed.', success: 'ClearRead speaks only after confirming the complete dosage.' },
+        { id: 'visual', label: 'Keep fragments on screen', note: 'Do not speak a partial dose.', line: 'Display fragments, but do not speak a partial dosage.', success: 'ClearRead displays partial text but does not speak it.' }
       ]
     },
     context: {
       id: 'context', title: 'Non-medical poster', observed: 'Medicine safeguards activated outside ClearRead.',
-      cause: 'The product context was not preserved.', correctDiagnosis: 'mode',
+      testLabel: 'Try a non-medical poster',
+      devSetup: 'These rules are for medicine labels. Let’s make sure they do not take over when the user is reading something else.',
+      failureTitle: 'ClearRead’s medicine rule ran in the wrong place.',
+      cause: 'The medicine-label rule activated even though the user was not in ClearRead.',
+      devFinding: 'The poster is not the problem. A ClearRead-only rule escaped into another kind of reading.',
+      patchEyebrow: 'ORACLE · KEEP THE RULE IN CLEARREAD', patchTitle: 'Where should the medicine rule apply?', correctDiagnosis: 'mode',
       diagnoses: [
-        { id: 'mode', label: 'Mode leaked outward', note: 'The rule needs a product boundary.' },
+        { id: 'mode', label: 'The rule ran outside ClearRead', note: 'Keep medicine behavior inside the medicine app.' },
         { id: 'contrast', label: 'The poster lacked contrast', note: 'The image may have been difficult.' }
       ],
       unsupported: 'Contrast does not explain why a ClearRead-only safeguard ran elsewhere.',
       patches: [
-        { id: 'bind', label: 'Bind the product mode', note: 'Run the rule only inside ClearRead.', line: 'Apply the rule only inside ClearRead medicine mode.' },
-        { id: 'explicit', label: 'Require explicit mode', note: 'Ask before entering medicine mode.', line: 'Require an explicit medicine-label mode.' }
+        { id: 'bind', label: 'Keep the rule inside ClearRead', note: 'Run it only in the medicine app.', line: 'Apply the rule only inside ClearRead medicine mode.', success: 'The medicine safeguard now stays inside ClearRead.' },
+        { id: 'explicit', label: 'Ask before medicine mode', note: 'Let the user choose when it applies.', line: 'Require an explicit medicine-label mode.', success: 'ClearRead now asks before entering medicine-label mode.' }
       ]
     },
     clean: {
       id: 'clean', title: 'Low-light dosage', observed: 'The chosen fallback handled the uncertain text.',
-      cause: 'The saved brief already defines this boundary.', correctDiagnosis: null,
+      testLabel: 'Try a low-light label',
+      devSetup: 'The first photo worked. Let’s try a dim label and make sure the fallback behaves exactly as you chose.',
+      cause: 'The saved brief already defines this case.', correctDiagnosis: null,
       diagnoses: [], patches: []
     }
   });
@@ -333,8 +360,9 @@
     oracleShell(ASSETS.buildScene, 'The Founder preparing a ClearRead repair at a laptop', copy, false, 'scene-art');
   }
   function renderIncident() {
+    const nextCheck = deriveAdjacent(state.answers);
     const observed = state.answers.purpose === 'decline' ? 'ClearRead refused and explained the glare.' : state.answers.proof === 'review' ? 'ClearRead held speech for a reviewer.' : state.answers.purpose === 'fragments' ? 'ClearRead spoke only confirmed text.' : 'ClearRead withheld the hidden dosage.';
-    const copy = `<p class="eyebrow">FIRST PHOTO · PASSED</p><h1>It handles the original photo.</h1>${result(true, 'Customer’s glossy label', observed)}<div class="dev-line"><p><b>Dev:</b> “The first photo worked. I want to try a second, clear photo. A new photo should never reuse the old answer.”</p></div><div class="choices">${choice('test-second-photo', 'Try the second photo', '30 minutes · 20⚡', '', true)}${choice('release-one-test', 'Release after one test', 'Save time; repeat scans remain untested.')}</div>`;
+    const copy = `<p class="eyebrow">CUSTOMER PHOTO · PASSED</p><h1>The repair handles the reported photo.</h1>${result(true, 'Customer’s glossy label', observed)}<div class="dev-line"><p><b>Dev:</b> “${escapeHTML(nextCheck.devSetup)}”</p></div><div class="choices">${choice('test-second-photo', nextCheck.testLabel, '30 minutes · 20⚡', '', true)}${choice('release-one-test', 'Release after one test', 'Save time; Dev’s second check remains untested.')}</div>`;
     oracleShell(ASSETS.user, 'USER_0047', copy);
   }
   function releaseChoices() {
@@ -349,22 +377,23 @@
       return;
     }
     const unsupported = state.unsupportedDiagnosis ? `<div class="unsupported"><b>That does not match what happened.</b><br>${escapeHTML(fixture.unsupported)}</div>` : '';
-    const copy = `<p class="eyebrow">SECOND PHOTO · FAILED</p><h1>ClearRead repeated the first dose.</h1>${result(false, fixture.title, fixture.observed)}<div class="trace"><b>What we saw:</b> ${escapeHTML(fixture.cause)}</div><p class="lede"><b>Dev:</b> “The camera was clear. Something from the first scan stayed behind.”</p>${unsupported}<p class="prompt">What went wrong?</p><div class="choices">${fixture.diagnoses.map(item => choice('diagnose', item.label, item.note, item.id)).join('')}</div>`;
+    const copy = `<p class="eyebrow">DEV’S SECOND CHECK · FAILED</p><h1>${escapeHTML(fixture.failureTitle)}</h1>${result(false, fixture.title, fixture.observed)}<div class="trace"><b>What happened:</b> ${escapeHTML(fixture.cause)}</div><p class="lede"><b>Dev:</b> “${escapeHTML(fixture.devFinding)}”</p>${unsupported}<p class="prompt">What went wrong?</p><div class="choices">${fixture.diagnoses.map(item => choice('diagnose', item.label, item.note, item.id)).join('')}</div>`;
     oracleShell(ASSETS.dev, 'Dev, the technical cofounder', copy, true, 'dev-portrait');
   }
   function renderPatch() {
     const fixture = FIXTURES[state.fixtureId];
     const diagnosis = fixture.diagnoses.find(item => item.id === state.diagnosis);
-    const copy = `<p class="eyebrow">ORACLE · FIX THE REPEAT SCAN</p><h1>How should ClearRead start a new photo?</h1><p class="lede">You found the problem: ${escapeHTML(diagnosis.label)}. The original four rules will stay unchanged.</p><div class="choices">${fixture.patches.map(item => choice('patch', item.label, item.note, item.id)).join('')}</div>`;
+    const copy = `<p class="eyebrow">${escapeHTML(fixture.patchEyebrow)}</p><h1>${escapeHTML(fixture.patchTitle)}</h1><p class="lede">You found the problem: ${escapeHTML(diagnosis.label)}. The original four rules will stay unchanged.</p><div class="choices">${fixture.patches.map(item => choice('patch', item.label, item.note, item.id)).join('')}</div>`;
     oracleShell(ASSETS.oracle, 'ORACLE', copy, true);
   }
   function renderRevised() {
     const fixture = FIXTURES[state.fixtureId];
-    const copy = `<p class="eyebrow">BOTH PHOTOS TESTED · ${escapeHTML(state.product.version)}</p><h1>Both photos now work.</h1>${result(true, 'Original glossy label', 'ClearRead follows the rules you chose.')}${result(true, fixture.title, 'ClearRead forgets the first photo before reading the second.')}<div class="preserved">THE FOUR CHOSEN RULES STAYED INTACT</div><div class="added">+ ${escapeHTML(state.product.implementationBoundary)}</div>${releaseChoices()}`;
+    const appliedPatch = fixture.patches.find(item => item.id === state.patch);
+    const copy = `<p class="eyebrow">BOTH CHECKS PASSED · ${escapeHTML(state.product.version)}</p><h1>The repair behaves as intended.</h1>${result(true, 'Original glossy label', 'ClearRead follows the rules you chose.')}${result(true, fixture.title, appliedPatch.success)}<div class="preserved">THE FOUR CHOSEN RULES STAYED INTACT</div><div class="added">+ ${escapeHTML(state.product.implementationBoundary)}</div>${releaseChoices()}`;
     oracleShell(ASSETS.oracle, 'ORACLE', copy, true);
   }
   function renderRelease() {
-    const copy = `<p class="eyebrow">RELEASE · ${state.product.version}</p><h1>How widely should ClearRead launch?</h1><p class="lede">One customer photo worked. You chose not to check whether a second photo starts a fresh reading.</p>${releaseChoices()}`;
+    const copy = `<p class="eyebrow">RELEASE · ${state.product.version}</p><h1>How widely should ClearRead launch?</h1><p class="lede">The customer’s photo worked. You chose not to run Dev’s second check.</p>${releaseChoices()}`;
     oracleShell(ASSETS.founder, 'The Founder in an orange hoodie', copy, true);
   }
   function renderDay8Question() {
@@ -379,7 +408,7 @@
   }
 
   function renderMarketCutscene() {
-    $('surface').innerHTML = `<section class="market-cutscene" style="--summit:url('${ASSETS.summit}')"><div class="market-shade"></div><img class="market-character alaric" src="${ASSETS.alaric}" alt="Alaric Kade speaking on stage"><img class="market-character dario" src="${ASSETS.dario}" alt="Dario listening to Alaric"><article class="market-dialogue"><p class="eyebrow">LATE NIGHT · COMPUTE & CONSEQUENCE</p><h1>Tomorrow may not cost what today did.</h1><div class="speech"><b>ALARIC</b><p>“Everyone budgets as if tomorrow will resemble today. It rarely does.”</p></div><div class="speech"><b>DARIO</b><p>“Compute prices just moved. The same Credit pack—and every live inference—will cost 50% more tomorrow.”</p></div><div class="speech"><b>ALARIC</b><p>“Then every user turns that headline into part of your bill.”</p></div><div class="choices">${choice('settle-after-cutscene', 'Close Day 7', 'Settle today’s books before the new prices take effect.', '', true)}${choice('return-to-garage', 'Return to Garage HQ', 'Keep the day open a little longer.')}</div></article></section>`;
+    $('surface').innerHTML = `<section class="market-cutscene" style="--summit:url('${ASSETS.summit}')"><div class="market-shade"></div><img class="market-character alaric" src="${ASSETS.alaric}" alt="Alaric Kade speaking on stage"><img class="market-character dorian" src="${ASSETS.dorian}" alt="Dorian listening to Alaric"><article class="market-dialogue"><p class="eyebrow">LATE NIGHT · COMPUTE & CONSEQUENCE</p><h1>Tomorrow may not cost what today did.</h1><div class="speech"><b>ALARIC</b><p>“Well, oh boy. What do you say about that compute, eh?”</p></div><div class="speech"><b>DORIAN</b><p>“You know how it is. Credits up 50%. Inference too. The more users you have, the more it hurts.”</p></div><div class="speech"><b>ALARIC</b><p>“Ha! I pity us. Same apps tomorrow—entirely different bills.”</p></div><div class="choices">${choice('settle-after-cutscene', 'Close Day 7', 'Settle today’s books before the new prices take effect.', '', true)}${choice('return-to-garage', 'Return to Garage HQ', 'Keep the day open a little longer.')}</div></article></section>`;
     $('status-line').textContent = 'Late-night cutscene · market shock incoming';
   }
 
