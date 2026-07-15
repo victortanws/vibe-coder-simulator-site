@@ -12,7 +12,6 @@
     founder: `${ROOT}/ChatGPT/R-assets/founder/PC-01a/pc-01a-v2.png`,
     buildScene: `${ROOT}/assets/scenes/founder-vibe-coding/pc-01-vibe-code-first-app-success-v1.png`,
     dev: `${ROOT}/ChatGPT/R-assets/cast/CAST-04/cast-04-dev-bust-v1.png`,
-    devExpressions: `${ROOT}/ChatGPT/R-assets/cast/CAST-04/cast-04-dev-expression-grid-v1.png`,
     founderSprite: `${ROOT}/assets/generated/sprites/PC-01/frames/idle/front-01.png`
   });
 
@@ -311,10 +310,7 @@
   }
 
   function oracleShell(portrait, alt, copy, pixel = false, portraitClass = '') {
-    const portraitMarkup = portraitClass === 'dev-decisive'
-      ? `<div class="portrait dev-decisive" role="img" aria-label="${escapeHTML(alt)}"></div>`
-      : `<img class="portrait${portraitClass ? ` ${portraitClass}` : ''}" src="${portrait}" alt="${escapeHTML(alt)}">`;
-    $('surface').innerHTML = `<div class="oracle"><div class="oracle-bg${pixel ? ' pixel' : ''}"></div>${portraitMarkup}<article class="oracle-panel"><div class="copy">${copy}</div></article></div>`;
+    $('surface').innerHTML = `<div class="oracle"><div class="oracle-bg${pixel ? ' pixel' : ''}"></div><img class="portrait${portraitClass ? ` ${portraitClass}` : ''}" src="${portrait}" alt="${escapeHTML(alt)}"><article class="oracle-panel"><div class="copy">${copy}</div></article></div>`;
     $('status-line').textContent = `ORACLE workflow · ${state.oracleStage}`;
   }
 
@@ -346,12 +342,12 @@
     const fixture = FIXTURES[state.fixtureId];
     if (state.fixturePass) {
       const copy = `<p class="eyebrow">SECOND PHOTO · PASSED</p><h1>The new photo gets a new answer.</h1>${result(true, fixture.title, fixture.observed)}<p class="lede"><b>Dev:</b> “Both photos work. Now decide how widely to release this build.”</p>${releaseChoices()}`;
-      oracleShell(ASSETS.devExpressions, 'Dev, the technical cofounder', copy, true, 'dev-decisive');
+      oracleShell(ASSETS.dev, 'Dev, the technical cofounder', copy, true);
       return;
     }
     const unsupported = state.unsupportedDiagnosis ? `<div class="unsupported"><b>That does not match what happened.</b><br>${escapeHTML(fixture.unsupported)}</div>` : '';
     const copy = `<p class="eyebrow">SECOND PHOTO · FAILED</p><h1>ClearRead repeated the first dose.</h1>${result(false, fixture.title, fixture.observed)}<div class="trace"><b>What we saw:</b> ${escapeHTML(fixture.cause)}</div><p class="lede"><b>Dev:</b> “The camera was clear. Something from the first scan stayed behind.”</p>${unsupported}<p class="prompt">What went wrong?</p><div class="choices">${fixture.diagnoses.map(item => choice('diagnose', item.label, item.note, item.id)).join('')}</div>`;
-    oracleShell(ASSETS.devExpressions, 'Dev, the technical cofounder', copy, true, 'dev-decisive');
+    oracleShell(ASSETS.dev, 'Dev, the technical cofounder', copy, true);
   }
   function renderPatch() {
     const fixture = FIXTURES[state.fixtureId];
