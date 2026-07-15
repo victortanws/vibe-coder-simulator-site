@@ -16,7 +16,8 @@
 
   const ECONOMY = Object.freeze({
     openingCash: 560, users: 84, credits: 620, focus: 4,
-    revenuePerUserDay: .09, aiDaily: 2.25, fixedDaily: 105,
+    revenuePerUserDay: .09, baselineUsers: 84,
+    aiDailyAtBaselineUsage: 2.25, fixedDaily: 105,
     day8Multiplier: 1.5
   });
   const COSTS = Object.freeze({
@@ -137,12 +138,17 @@
     return FIXTURES.clean;
   }
 
-  function approvedSettlement(opening = ECONOMY.openingCash) {
-    const revenue = roundMoney(ECONOMY.users * ECONOMY.revenuePerUserDay);
+  function inferenceCost(users = ECONOMY.users, multiplier = 1) {
+    return roundMoney(ECONOMY.aiDailyAtBaselineUsage * (users / ECONOMY.baselineUsers) * multiplier);
+  }
+
+  function approvedSettlement(opening = ECONOMY.openingCash, users = ECONOMY.users) {
+    const revenue = roundMoney(users * ECONOMY.revenuePerUserDay);
+    const aiCost = inferenceCost(users);
     return {
-      opening, revenue, aiCost: ECONOMY.aiDaily, fixed: ECONOMY.fixedDaily,
-      closing: roundMoney(opening + revenue - ECONOMY.aiDaily - ECONOMY.fixedDaily),
-      users: ECONOMY.users, day8AI: roundMoney(ECONOMY.aiDaily * ECONOMY.day8Multiplier)
+      opening, revenue, aiCost, fixed: ECONOMY.fixedDaily,
+      closing: roundMoney(opening + revenue - aiCost - ECONOMY.fixedDaily),
+      users, day8AI: inferenceCost(users, ECONOMY.day8Multiplier)
     };
   }
 
@@ -334,7 +340,7 @@
   function renderSettlement() {
     const ledger = approvedSettlement();
     renderWorld();
-    $('surface').insertAdjacentHTML('beforeend', `<div class="modal-wrap"><section class="modal"><p class="eyebrow">END DAY · SETTLEMENT</p><h1>Day 7 closes here.</h1><p class="lede">Product work ended earlier. This separate action closes the company books.</p><div class="ledger"><div class="ledger-row"><span>Opening cash</span><b>${money(ledger.opening)}</b></div><div class="ledger-row"><span>84 users × $0.09</span><b>+${money(ledger.revenue)}</b></div><div class="ledger-row"><span>AI operations</span><b>−${money(ledger.aiCost)}</b></div><div class="ledger-row"><span>Rent and tools</span><b>−${money(ledger.fixed)}</b></div><div class="ledger-row"><span>Market response</span><b>Pending</b></div><div class="ledger-row total"><span>Closing cash</span><b>${money(ledger.closing)}</b></div></div><div class="market-note"><span>DAY 8 · MARKET NOTICE</span><strong>Inference cost multiplier: 1.0× → 1.5×</strong><small>${money(ledger.aiCost)}/day becomes ${money(ledger.day8AI)}/day.</small></div><div class="world-actions">${action('begin-day8', 'Begin Day 8', 'Carry the saved build and release record forward.', 'primary')}</div></section></div>`);
+    $('surface').insertAdjacentHTML('beforeend', `<div class="modal-wrap"><section class="modal"><p class="eyebrow">END DAY · SETTLEMENT</p><h1>Day 7 closes here.</h1><p class="lede">Product work ended earlier. This separate action closes the company books.</p><div class="ledger"><div class="ledger-row"><span>Opening cash</span><b>${money(ledger.opening)}</b></div><div class="ledger-row"><span>84 users × $0.09</span><b>+${money(ledger.revenue)}</b></div><div class="ledger-row"><span>AI operations · 84 active users</span><b>−${money(ledger.aiCost)}</b></div><div class="ledger-row"><span>Rent and tools</span><b>−${money(ledger.fixed)}</b></div><div class="ledger-row"><span>Market response</span><b>Pending</b></div><div class="ledger-row total"><span>Closing cash</span><b>${money(ledger.closing)}</b></div></div><div class="market-note"><span>DAY 8 · COMPUTE MARKET SHOCK</span><strong>Unit inference price: 1.0× → 1.5×</strong><small>At the same 84-user usage: ${money(ledger.aiCost)}/day → ${money(ledger.day8AI)}/day.</small><small>Existing prepaid Credits stay intact. Future top-ups cost 1.5× cash; pack price is still TBD.</small></div><div class="world-actions">${action('begin-day8', 'Begin Day 8', 'Carry the saved build and release record forward.', 'primary')}</div></section></div>`);
     $('status-line').textContent = 'End Day · settlement authority';
   }
 
@@ -408,7 +414,7 @@
     render(); save();
   }
 
-  const api = { ASSETS, ECONOMY, COSTS, QUESTIONS, FIXTURES, freshState, chosenLines, deriveAdjacent, approvedSettlement, futureScenarioPool, applyPatch, settleState };
+  const api = { ASSETS, ECONOMY, COSTS, QUESTIONS, FIXTURES, freshState, chosenLines, deriveAdjacent, inferenceCost, approvedSettlement, futureScenarioPool, applyPatch, settleState };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   if (typeof window !== 'undefined') window.__secondLoopExperiment = { getState: () => state, reset: restart, mechanics: api };
   if (typeof document !== 'undefined') document.addEventListener('DOMContentLoaded', boot);
