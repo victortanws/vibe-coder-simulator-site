@@ -2,29 +2,37 @@
 
 (function () {
   const ROOT = '..';
-  const STORAGE_KEY = 'vcs_second_loop_state_v1';
-  const SCHEMA_VERSION = 1;
+  const STORAGE_KEY = 'vcs_second_loop_state_v2';
+  const SCHEMA_VERSION = 2;
   const ASSETS = Object.freeze({
     night: `${ROOT}/ChatGPT/UI-UX/backgrounds/BG-12/bg-12-dark-night-garage-v1.png`,
     garage: `${ROOT}/ChatGPT/R-assets/pixel-drafts/tilesets/Garage/garage-tileset-tier-2-v1.png`,
     user: `${ROOT}/ChatGPT/R-assets/cast/CAST-28/cast-28-user-0047-embodied-v1.png`,
     oracle: `${ROOT}/ChatGPT/R-assets/oracle/ORACLE-02/oracle-02-v1.png`,
-    founder: `${ROOT}/assets/generated/PC-01b/pc-01b-v2.png`,
+    founder: `${ROOT}/ChatGPT/R-assets/founder/PC-01a/pc-01a-v2.png`,
     dev: `${ROOT}/ChatGPT/R-assets/cast/CAST-04/cast-04-dev-bust-v1.png`,
     founderSprite: `${ROOT}/assets/generated/sprites/PC-01/frames/idle/front-01.png`
   });
 
   const ECONOMY = Object.freeze({
-    openingCash: 560, users: 84, credits: 620, focus: 4,
+    openingCash: 700, users: 84, credits: 80, focus: 4,
     revenuePerUserDay: .09, baselineUsers: 84,
     aiDailyAtBaselineUsage: 2.25, fixedDaily: 105,
-    day8Multiplier: 1.5
+    day8Multiplier: 1.5,
+    creditPack: 200, day7PackPrice: 120, day8PackPrice: 180
   });
   const COSTS = Object.freeze({
     build: { minutes: 60, credits: 80, focus: 1 },
     test: { minutes: 30, credits: 20, focus: 0 },
-    revise: { minutes: 45, credits: 36, focus: 1 }
+    revise: { minutes: 45, credits: 36, focus: 1 },
+    day8Update: { minutes: 90, credits: 150, focus: 1 }
   });
+
+  const DAY8_OPTIONS = Object.freeze([
+    { id: 'local', label: 'Run a small model on the phone', note: 'Keep core label reading available offline.', line: 'When the connection drops, read supported labels with the on-device model.' },
+    { id: 'decline', label: 'Explain that ClearRead is offline', note: 'Do not attempt a reading without the network.', line: 'When the connection drops, explain that reading is unavailable.' },
+    { id: 'sync', label: 'Save the photo for later', note: 'Queue it only after the user agrees.', line: 'With consent, queue the photo until the connection returns.' }
+  ]);
 
   const QUESTIONS = Object.freeze([
     { id: 'purpose', title: 'What should ClearRead do?', options: [
@@ -142,12 +150,12 @@
     return roundMoney(ECONOMY.aiDailyAtBaselineUsage * (users / ECONOMY.baselineUsers) * multiplier);
   }
 
-  function approvedSettlement(opening = ECONOMY.openingCash, users = ECONOMY.users) {
+  function approvedSettlement(opening = ECONOMY.openingCash, users = ECONOMY.users, multiplier = 1, directSpend = 0) {
     const revenue = roundMoney(users * ECONOMY.revenuePerUserDay);
-    const aiCost = inferenceCost(users);
+    const aiCost = inferenceCost(users, multiplier);
     return {
-      opening, revenue, aiCost, fixed: ECONOMY.fixedDaily,
-      closing: roundMoney(opening + revenue - aiCost - ECONOMY.fixedDaily),
+      opening, directSpend, revenue, aiCost, fixed: ECONOMY.fixedDaily,
+      closing: roundMoney(opening - directSpend + revenue - aiCost - ECONOMY.fixedDaily),
       users, day8AI: inferenceCost(users, ECONOMY.day8Multiplier)
     };
   }
@@ -160,13 +168,14 @@
 
   function freshState() {
     return {
-      schema: SCHEMA_VERSION, view: 'world', oracleStage: null, question: 0,
+      schema: SCHEMA_VERSION, view: 'dialogue', oracleStage: null, question: 0,
       day: 7, minutes: 540, cash: ECONOMY.openingCash, users: ECONOMY.users,
       credits: ECONOMY.credits, focus: ECONOMY.focus, answers: {}, taps: 0,
       fixtureId: null, fixturePass: null, unsupportedDiagnosis: null,
-      diagnosis: null, patch: null, settled: false,
+      diagnosis: null, patch: null, settledDays: {}, settlements: [], purchases: [],
+      dayOpeningCash: ECONOMY.openingCash, day8Answer: null, day8Update: null,
       product: {
-        name: 'ClearRead', version: null, behaviors: [], implementationBoundary: null,
+        name: 'ClearRead', createdByPlayer: true, version: '0.7.4', behaviors: [], implementationBoundary: null,
         evidence: [], release: null, futureScenarios: []
       },
       events: []
@@ -188,13 +197,33 @@
     return true;
   }
 
+  function creditPackPrice(day) {
+    return day === 8 ? ECONOMY.day8PackPrice : ECONOMY.day7PackPrice;
+  }
+
+  function buyCredits(state) {
+    const price = creditPackPrice(state.day);
+    if (state.cash < price) return false;
+    state.cash = roundMoney(state.cash - price);
+    state.credits += ECONOMY.creditPack;
+    state.purchases.push({ day: state.day, credits: ECONOMY.creditPack, cash: price });
+    return true;
+  }
+
+  function settlementForState(state) {
+    const directSpend = state.purchases.filter(item => item.day === state.day).reduce((sum, item) => sum + item.cash, 0);
+    const multiplier = state.day === 8 ? ECONOMY.day8Multiplier : 1;
+    return approvedSettlement(state.dayOpeningCash, state.users, multiplier, directSpend);
+  }
+
   function settleState(state) {
-    if (state.settled) return state;
-    const ledger = approvedSettlement(state.cash);
+    if (state.settledDays[state.day]) return state;
+    const ledger = settlementForState(state);
     state.cash = ledger.closing;
     state.users = ledger.users;
     state.minutes = 1440;
-    state.settled = true;
+    state.settledDays[state.day] = true;
+    state.settlements.push({ day: state.day, ...ledger });
     return state;
   }
 
@@ -242,27 +271,42 @@
   }
 
   function worldProductCard() {
-    if (!state.product.version) return `<aside class="world-card product-card"><p class="eyebrow">COMPANY RECORD</p><h2>No saved build yet</h2><p class="lede">Your product state will appear here after ORACLE generates it.</p></aside>`;
     const release = state.product.release;
-    return `<aside class="world-card product-card"><p class="eyebrow">ACTIVE PRODUCT</p><h2>ClearRead ${escapeHTML(state.product.version)}</h2><div class="product-status"><div class="status-row"><span>Evidence</span><b>${state.product.evidence.length}/2 fixtures</b></div><div class="status-row"><span>Release</span><b>${release ? escapeHTML(release.label) : 'Not recorded'}</b></div><div class="status-row"><span>Market result</span><b class="pending">${release ? 'Pending' : '—'}</b></div></div></aside>`;
+    return `<aside class="world-card product-card"><p class="eyebrow">${release ? 'ACTIVE PRODUCT' : 'YOUR FIRST APP'}</p><h2>ClearRead ${escapeHTML(state.product.version)}</h2><div class="product-status"><div class="status-row"><span>Created by</span><b>The Founder</b></div><div class="status-row"><span>Evidence</span><b>${state.product.evidence.length}/${state.day8Update ? 3 : 2} fixtures</b></div><div class="status-row"><span>Release</span><b>${release ? escapeHTML(release.label) : 'Needs a fix'}</b></div><div class="status-row"><span>Market result</span><b class="pending">${release ? 'Pending' : '—'}</b></div></div></aside>`;
   }
 
   function renderWorld() {
     const released = Boolean(state.product.release);
     const morning = state.view === 'morning';
-    const heading = morning ? 'Yesterday carried forward.' : released ? 'Back in the garage.' : 'A customer needs your help.';
+    const day8Done = Boolean(state.day8Update);
+    const needsTopUp = state.day === 7 ? state.credits < 120 : state.credits < COSTS.day8Update.credits;
+    const heading = morning ? day8Done ? 'The second build is recorded.' : 'The clinic is waiting.' : released ? 'Back in the garage.' : 'Your first app needs a fix.';
     const body = morning
-      ? `ClearRead ${state.product.version} is still active. Its behaviors, evidence and ${state.product.release.label.toLowerCase()} remain on the company record.`
+      ? day8Done
+        ? `ClearRead ${state.product.version} now carries yesterday's behaviors and today's offline rule. Its market response remains pending.`
+        : `ClearRead ${state.product.version} is still active. Westside Clinic needs it to work when the connection drops.`
       : released
         ? `ClearRead ${state.product.version} is recorded. Its market result is pending, and the rest of Day 7 is still yours.`
-        : 'USER_0047 reports that ClearRead spoke the wrong dosage from a glossy medicine label.';
+        : 'You created ClearRead. USER_0047 has now shown you where its first live version failed.';
+    const topUp = action('buy-credits', `Buy ${ECONOMY.creditPack} AI Credits · ${money(creditPackPrice(state.day))}`, state.day === 8 ? 'The same pack now costs 50% more cash.' : 'Enough capacity to build, test and revise.', 'buy-credits');
     const actions = morning
-      ? `${action('record', 'Open company record', 'See exactly what survived the night.', 'primary')}${action('restart', 'Replay this experiment', 'Clear the local experiment state.')}`
+      ? day8Done
+        ? `${action('record', 'Open company record', 'See both saved product passes.', 'primary')}${action('end-day', 'End Day 8', 'Close the second day when you choose.', 'end-day')}`
+        : `${needsTopUp ? topUp : ''}${action('enter-day8-oracle', 'Build the offline update', `${COSTS.day8Update.minutes} minutes · ${COSTS.day8Update.credits}⚡ · ${COSTS.day8Update.focus} Focus`, 'primary', needsTopUp)}`
       : released
         ? `${action('record', 'Open company record', 'Review the active build and pending exposure.', 'primary')}${action('end-day', 'End Day 7', 'Close the books when you choose.', 'end-day')}`
-        : `${action('enter-oracle', 'Enter ORACLE Studio', 'Define, build, test and record a release.', 'primary')}`;
-    $('surface').innerHTML = `<div class="world"><div class="world-bg"></div><div class="world-shade"></div><div class="world-grid"><section class="world-card"><p class="eyebrow">${morning ? 'GARAGE HQ · DAY 8' : 'GARAGE HQ · DAY 7'}</p><h1>${heading}</h1><p class="lede">${escapeHTML(body)}</p>${!released && !morning ? '<div class="incident"><b>USER_0047:</b> “The box says half. Grandma almost took two.”</div>' : ''}<div class="world-actions">${actions}</div></section><img class="world-founder" src="${ASSETS.founder}" alt="The Founder in an orange hoodie">${worldProductCard()}</div></div>`;
+        : `${needsTopUp ? topUp : ''}${action('enter-oracle', 'Enter ORACLE Studio', 'Define, build, test and record a release.', 'primary', needsTopUp)}`;
+    $('surface').innerHTML = `<div class="world"><div class="world-bg"></div><div class="world-shade"></div><div class="world-grid"><section class="world-card"><p class="eyebrow">${morning ? 'GARAGE HQ · DAY 8' : 'GARAGE HQ · DAY 7'}</p><h1>${heading}</h1><p class="lede">${escapeHTML(body)}</p><div class="world-actions">${actions}</div></section><img class="world-founder sprite" src="${ASSETS.founderSprite}" alt="The Founder standing in the pixel-art garage">${worldProductCard()}</div></div>`;
     $('status-line').textContent = morning ? 'Day 8 · carried company state' : released ? 'Garage HQ · release pending' : 'Garage HQ · choose a station';
+  }
+
+  function renderDialogue(day = state.day) {
+    const day8 = day === 8;
+    const copy = day8
+      ? `<p class="eyebrow">08:42 · WESTSIDE CLINIC</p><h1>“The Wi-Fi dropped again.”</h1><div class="messages"><div class="message"><b>USER_0047</b> · The clinic is using the ClearRead app you built.</div><div class="message">When the connection vanished, fourteen patients lost label reading with it.</div></div><p class="lede">Yesterday's build is still live. Today, the same compute pack costs 50% more.</p><div class="choices">${choice('continue-day8', 'Take the call', 'Return to the garage with this new problem.', '', true)}</div>`
+      : `<p class="eyebrow">23:58 · YOUR FIRST CUSTOMER</p><h1>“The box says half.”</h1><div class="messages"><div class="message"><b>USER_0047</b> · I tried the ClearRead app you made.</div><div class="message">It read the wrong dose out loud. Grandma almost took two.</div></div><p class="lede">ClearRead is your first live app. What you choose next becomes its next version.</p><div class="choices">${choice('continue-customer', 'Help her', 'Take the incident back to your garage.', '', true)}</div>`;
+    oracleShell(ASSETS.user, 'USER_0047, a ClearRead customer', copy);
+    $('status-line').textContent = day8 ? 'Customer dialogue · Day 8' : 'Customer dialogue · opening incident';
   }
 
   function oracleShell(portrait, alt, copy, pixel = false) {
@@ -273,9 +317,8 @@
   function renderQuestion() {
     const question = QUESTIONS[state.question];
     const first = state.question === 0;
-    const incident = first ? '<div class="messages"><div class="message"><b>USER_0047</b> · ClearRead spoke the wrong dose from a glossy label.</div><div class="message">The box says half. Grandma almost took two.</div></div>' : '';
-    const copy = `<p class="eyebrow">${first ? '23:58 · INCIDENT' : `ORACLE · QUESTION ${state.question + 1} OF 4`}</p><h1>${escapeHTML(question.title)}</h1>${incident}<div class="choices">${question.options.map((item, index) => choice('answer', item.label, item.note, item.id, first && index === 0)).join('')}</div>`;
-    oracleShell(first ? ASSETS.user : ASSETS.oracle, first ? 'USER_0047' : 'ORACLE', copy, !first);
+    const copy = `<p class="eyebrow">ORACLE · QUESTION ${state.question + 1} OF 4</p><h1>${escapeHTML(question.title)}</h1>${first ? '<p class="lede">Turn the customer\'s incident into observable product behavior.</p>' : ''}<div class="choices">${question.options.map(item => choice('answer', item.label, item.note, item.id)).join('')}</div>`;
+    oracleShell(ASSETS.oracle, 'ORACLE', copy, true);
   }
 
   function renderBrief() {
@@ -324,13 +367,31 @@
     oracleShell(ASSETS.founder, 'The Founder in an orange hoodie', copy, true);
   }
 
+  function renderDay8Question() {
+    const copy = `<p class="eyebrow">ORACLE · DAY 8 UPDATE</p><h1>What should ClearRead do offline?</h1><p class="lede">Choose one observable behavior for the clinic's connection failures.</p><div class="choices">${DAY8_OPTIONS.map(item => choice('day8-answer', item.label, item.note, item.id)).join('')}</div>`;
+    oracleShell(ASSETS.oracle, 'ORACLE', copy, true);
+  }
+
+  function renderDay8Brief() {
+    const selected = DAY8_OPTIONS.find(item => item.id === state.day8Answer);
+    const copy = `<p class="eyebrow">ORACLE · UPDATE READBACK</p><h1>Add one behavior. Keep the rest.</h1>${behaviorList(true)}<div class="added">+ ${escapeHTML(selected.line)}</div><p class="cost">90 minutes · 150⚡ · 1 Focus</p><div class="choices">${choice('day8-build', 'Build and replay the outage', 'Generate ClearRead 0.8.0 and test it at the clinic.', '', true)}</div>`;
+    oracleShell(ASSETS.founder, 'The confident Founder holding a laptop', copy, true);
+  }
+
+  function renderDay8Result() {
+    const selected = DAY8_OPTIONS.find(item => item.id === state.day8Answer);
+    const copy = `<p class="eyebrow">OUTAGE REPLAY · 0.8.0</p><h1>The clinic stays covered.</h1>${result(true, 'Connection lost', selected.line)}<div class="preserved">DAY 7 BUILD PRESERVED · DAY 8 RULE ADDED</div><div class="choices">${choice('day8-record', 'Record the Day 8 update', 'Return to Garage HQ with the result still pending.', '', true)}</div>`;
+    oracleShell(ASSETS.founder, 'The confident Founder holding a laptop', copy, true);
+  }
+
   function recordMarkup() {
     const release = state.product.release;
     const behaviors = state.product.behaviors.map(line => `<li>${escapeHTML(line)}</li>`).join('');
     const boundary = state.product.implementationBoundary ? `<li>${escapeHTML(state.product.implementationBoundary)}</li>` : '';
     const evidence = state.product.evidence.map(item => `<li>${escapeHTML(item.label)} · ${item.result}</li>`).join('');
     const future = state.product.futureScenarios.map(item => `<li>${escapeHTML(item)}</li>`).join('');
-    return `<p class="eyebrow">COMPANY RECORD</p><h1>ClearRead ${escapeHTML(state.product.version)}</h1><p class="lede">This is the state later days and scenarios receive.</p><div class="record-grid"><section class="record-section"><h3>Active behavior</h3><ul>${behaviors}${boundary}</ul></section><section class="record-section"><h3>Recorded evidence</h3><ul>${evidence}</ul></section></div><div class="exposure"><b>${escapeHTML(release.label)}</b><br>${release.scope === 'wide' ? 'Future scenario selection may now draw from untested contexts. Features remain unchanged.' : 'Future scenario selection stays inside demonstrated conditions.'}<ul>${future}</ul></div>`;
+    const day8 = state.day8Update ? `<div class="exposure"><b>DAY 8 UPDATE · ${escapeHTML(state.day8Update.behavior)}</b><br>Outage replay passed. Market response remains pending.</div>` : '';
+    return `<p class="eyebrow">COMPANY RECORD</p><h1>ClearRead ${escapeHTML(state.product.version)}</h1><p class="lede">You created this app. This is the exact state later days and scenarios receive.</p><div class="record-grid"><section class="record-section"><h3>Active behavior</h3><ul>${behaviors}${boundary}</ul></section><section class="record-section"><h3>Recorded evidence</h3><ul>${evidence}</ul></section></div><div class="exposure"><b>${escapeHTML(release.label)}</b><br>${release.scope === 'wide' ? 'Future scenario selection may now draw from untested contexts. Features remain unchanged.' : 'Future scenario selection stays inside demonstrated conditions.'}<ul>${future}</ul></div>${day8}`;
   }
   function renderRecord() {
     renderWorld();
@@ -338,19 +399,23 @@
     $('status-line').textContent = 'Company record · persistent product state';
   }
   function renderSettlement() {
-    const ledger = approvedSettlement();
+    const ledger = state.settlements.find(item => item.day === state.day) || settlementForState(state);
+    const day8 = state.day === 8;
+    const purchase = state.purchases.find(item => item.day === state.day);
     renderWorld();
-    $('surface').insertAdjacentHTML('beforeend', `<div class="modal-wrap"><section class="modal"><p class="eyebrow">END DAY · SETTLEMENT</p><h1>Day 7 closes here.</h1><p class="lede">Product work ended earlier. This separate action closes the company books.</p><div class="ledger"><div class="ledger-row"><span>Opening cash</span><b>${money(ledger.opening)}</b></div><div class="ledger-row"><span>84 users × $0.09</span><b>+${money(ledger.revenue)}</b></div><div class="ledger-row"><span>AI operations · 84 active users</span><b>−${money(ledger.aiCost)}</b></div><div class="ledger-row"><span>Rent and tools</span><b>−${money(ledger.fixed)}</b></div><div class="ledger-row"><span>Market response</span><b>Pending</b></div><div class="ledger-row total"><span>Closing cash</span><b>${money(ledger.closing)}</b></div></div><div class="market-note"><span>DAY 8 · COMPUTE MARKET SHOCK</span><strong>Unit inference price: 1.0× → 1.5×</strong><small>At the same 84-user usage: ${money(ledger.aiCost)}/day → ${money(ledger.day8AI)}/day.</small><small>Existing prepaid Credits stay intact. Future top-ups cost 1.5× cash; pack price is still TBD.</small></div><div class="world-actions">${action('begin-day8', 'Begin Day 8', 'Carry the saved build and release record forward.', 'primary')}</div></section></div>`);
-    $('status-line').textContent = 'End Day · settlement authority';
+    $('surface').insertAdjacentHTML('beforeend', `<div class="modal-wrap"><section class="modal"><p class="eyebrow">END DAY · SETTLEMENT</p><h1>Day ${state.day} closes here.</h1><p class="lede">Product work ended earlier. This separate action closes the company books.</p><div class="ledger"><div class="ledger-row"><span>Opening cash</span><b>${money(ledger.opening)}</b></div>${purchase ? `<div class="ledger-row pain"><span>${purchase.credits} AI Credits</span><b>−${money(purchase.cash)}</b></div>` : ''}<div class="ledger-row"><span>${ledger.users} users × $0.09</span><b>+${money(ledger.revenue)}</b></div><div class="ledger-row"><span>AI operations · ${ledger.users} active users</span><b>−${money(ledger.aiCost)}</b></div><div class="ledger-row"><span>Rent and tools</span><b>−${money(ledger.fixed)}</b></div><div class="ledger-row"><span>Market response</span><b>Pending</b></div><div class="ledger-row total"><span>Closing cash</span><b>${money(ledger.closing)}</b></div></div>${day8 ? `<div class="market-note"><span>TWO-DAY COMPUTE RECEIPT</span><strong>Day 7 Credits: ${money(ECONOMY.day7PackPrice)} · Day 8 Credits: ${money(ECONOMY.day8PackPrice)}</strong><small>The same ${ECONOMY.creditPack}-Credit pack cost ${money(ECONOMY.day8PackPrice - ECONOMY.day7PackPrice)} more after the 1.5× market shock.</small></div>` : `<div class="market-note"><span>DAY 8 · COMPUTE MARKET SHOCK</span><strong>Unit inference and Credit prices: 1.0× → 1.5×</strong><small>At the same 84-user usage: ${money(ledger.aiCost)}/day → ${money(ledger.day8AI)}/day.</small><small>Your remaining prepaid Credits stay intact. The next ${ECONOMY.creditPack}-Credit pack rises from ${money(ECONOMY.day7PackPrice)} to ${money(ECONOMY.day8PackPrice)}.</small></div>`}<div class="world-actions">${day8 ? action('restart', 'Replay the two-day experiment', 'Compare another product strategy.', 'primary') : action('begin-day8', 'Begin Day 8', 'Carry the saved build and release record forward.', 'primary')}</div></section></div>`);
+    $('status-line').textContent = `End Day ${state.day} · settlement authority`;
   }
 
   function renderOracle() {
-    const views = { question: renderQuestion, brief: renderBrief, build: renderBuild, incident: renderIncident, adjacent: renderAdjacent, patch: renderPatch, revised: renderRevised, release: renderRelease, pending: renderPending };
+    const views = { question: renderQuestion, brief: renderBrief, build: renderBuild, incident: renderIncident, adjacent: renderAdjacent, patch: renderPatch, revised: renderRevised, release: renderRelease, pending: renderPending, day8Question: renderDay8Question, day8Brief: renderDay8Brief, day8Result: renderDay8Result };
     (views[state.oracleStage] || renderQuestion)();
   }
   function render() {
     renderHud();
-    if (state.view === 'oracle') renderOracle();
+    if (state.view === 'dialogue') renderDialogue(7);
+    else if (state.view === 'day8Dialogue') renderDialogue(8);
+    else if (state.view === 'oracle') renderOracle();
     else if (state.view === 'record') renderRecord();
     else if (state.view === 'settlement') renderSettlement();
     else renderWorld();
@@ -360,8 +425,17 @@
     state.view = view; state.oracleStage = stage; log('stage', stage || view); commit();
   }
   function handle(actionId, value) {
-    if (actionId === 'enter-oracle') {
+    if (actionId === 'continue-customer') {
+      transition('world');
+    } else if (actionId === 'continue-day8') {
+      transition('morning');
+    } else if (actionId === 'buy-credits') {
+      if (!buyCredits(state)) { toast('Not enough cash for this Credit pack.'); return; }
+      log('credit-purchase', `${ECONOMY.creditPack}:${creditPackPrice(state.day)}`); commit(); toast(`${ECONOMY.creditPack} AI Credits added`);
+    } else if (actionId === 'enter-oracle') {
       state.question = 0; transition('oracle', 'question');
+    } else if (actionId === 'enter-day8-oracle') {
+      transition('oracle', 'day8Question');
     } else if (actionId === 'answer') {
       const question = QUESTIONS[state.question]; state.answers[question.id] = value; state.taps += 1; log('answer', `${question.id}:${value}`);
       if (state.question < QUESTIONS.length - 1) { state.question += 1; state.oracleStage = 'question'; commit(); }
@@ -386,12 +460,21 @@
       state.taps += 1; const fixture = FIXTURES[state.fixtureId]; const label = value === 'wide' ? 'Wider-market release' : 'Evidence-matched release'; state.product.release = { scope: value, label, status: 'pending', day: state.day, build: state.product.version }; state.product.futureScenarios = futureScenarioPool(value, fixture.title); log('release', `${value}:${state.product.version}`); transition('oracle', 'pending');
     } else if (actionId === 'return-garage') {
       state.taps += 1; transition('world');
+    } else if (actionId === 'day8-answer') {
+      state.taps += 1; state.day8Answer = value; log('day8-answer', value); transition('oracle', 'day8Brief');
+    } else if (actionId === 'day8-build') {
+      const selected = DAY8_OPTIONS.find(item => item.id === state.day8Answer);
+      if (!selected || state.credits < COSTS.day8Update.credits) { toast('Top up AI Credits before building.'); return; }
+      state.taps += 1; spend(COSTS.day8Update); state.product.version = '0.8.0'; state.product.behaviors.push(selected.line); state.product.evidence.push({ id: 'offline', label: 'Westside Clinic outage', result: 'pass' }); log('day8-build', selected.id); transition('oracle', 'day8Result');
+    } else if (actionId === 'day8-record') {
+      const selected = DAY8_OPTIONS.find(item => item.id === state.day8Answer);
+      state.taps += 1; state.day8Update = { behavior: selected.line, status: 'pending', build: '0.8.0' }; state.product.release.build = '0.8.0'; log('day8-release', selected.id); transition('morning');
     } else if (actionId === 'record') transition('record');
     else if (actionId === 'close-record') transition(state.day === 8 ? 'morning' : 'world');
     else if (actionId === 'end-day') {
       settleState(state); log('settlement', `cash:${state.cash}`); transition('settlement');
     } else if (actionId === 'begin-day8') {
-      state.day = 8; state.minutes = 540; transition('morning');
+      state.day = 8; state.minutes = 540; state.dayOpeningCash = state.cash; transition('day8Dialogue');
     } else if (actionId === 'restart') restart();
   }
 
@@ -400,8 +483,11 @@
     clearTimeout(toastTimer); toastTimer = setTimeout(() => element.classList.remove('show'), 1800);
   }
   function restart() {
-    if (typeof localStorage !== 'undefined') localStorage.removeItem(STORAGE_KEY);
-    state = freshState(); log('start', 'second-loop-01'); commit(); toast('Experiment reset');
+    state = freshState(); log('start', 'second-loop-02'); render(); save();
+    if (typeof localStorage !== 'undefined') {
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (_) {}
+    }
+    toast('Experiment reset · 80⚡ · $700.00');
   }
   function boot() {
     state = load();
@@ -414,7 +500,7 @@
     render(); save();
   }
 
-  const api = { ASSETS, ECONOMY, COSTS, QUESTIONS, FIXTURES, freshState, chosenLines, deriveAdjacent, inferenceCost, approvedSettlement, futureScenarioPool, applyPatch, settleState };
+  const api = { ASSETS, ECONOMY, COSTS, QUESTIONS, FIXTURES, DAY8_OPTIONS, freshState, chosenLines, deriveAdjacent, inferenceCost, approvedSettlement, creditPackPrice, buyCredits, settlementForState, futureScenarioPool, applyPatch, settleState };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   if (typeof window !== 'undefined') window.__secondLoopExperiment = { getState: () => state, reset: restart, mechanics: api };
   if (typeof document !== 'undefined') document.addEventListener('DOMContentLoaded', boot);
