@@ -164,14 +164,14 @@ const registerActivity=definition=>addActivity(definition,{promptForMissing:fals
 
 registerActivity({
   id:'workout',name:'Work out',location:'Neighborhood gym',durationMinutes:60,
-  cost:{cash:20,energy:0},preview:{description:'Step away from the laptop and reset.'},presentation:{inheritWorldBackground:true,sceneClass:'activity-workout'},
+  cost:{cash:20,energy:0},preview:{description:'Step away from the laptop and reset.'},presentation:{background:'assets/scenes/founder-vibe-coding/generated/ACT-WORKOUT-01-gym-strength-partner-v4.png',sceneClass:'activity-workout'},
   script:'NARRATOR: You go and get swole in the gym because “mind over body” is a lie.',
   eventTable:[{id:'recovery',weight:1,title:'Energy +2!',script:'SYSTEM: Energy +2!',effects:[{id:'energy-gain',timing:'immediate',type:'energy',amount:2,label:'Workout recovery'}]}]
 });
 
 registerActivity({
   id:'meetup',name:'Community demo night',location:'Founder Commons',durationMinutes:90,
-  cost:{cash:0,energy:2},preview:{description:'Show ClearRead to a small room of founders.'},presentation:{inheritWorldBackground:true,sceneClass:'stage'},
+  cost:{cash:0,energy:2},preview:{description:'Show ClearRead to a small room of founders.'},presentation:{background:'assets/scenes/founder-vibe-coding/generated/ACT-DEMO-02-founder-microphone-pitch-v2.png',sceneClass:'stage'},
   script:'NARRATOR: You talk about your app to a small and cozy room of founders.',
   eventTable:[
     {id:'quiet-room',weight:1,title:'A very honest room',script:'NARRATOR: Half their eyes glaze over. One person shouts, “ANOTHER VIBE-CODED APP?!” Nobody donates tonight.',effects:[{id:'donation',timing:'settlement',type:'cash',amount:0,monetary:true,label:'Community demo donation'}]},
@@ -183,21 +183,21 @@ registerActivity({
 
 registerActivity({
   id:'class',name:'Product systems class',location:'Community classroom',durationMinutes:120,
-  cost:{cash:100,energy:3},preview:{description:'Trade an evening for one practical product lesson.'},presentation:{inheritWorldBackground:true,sceneClass:'activity-class'},
+  cost:{cash:100,energy:3},preview:{description:'Trade an evening for one practical product lesson.'},presentation:{background:'assets/scenes/founder-vibe-coding/generated/ACT-CLASS-01-high-tech-lecture-focused-v3.png',sceneClass:'activity-class'},
   script:'NARRATOR: You went for a product systems class!',
   eventTable:ACTIVITY_LESSONS.map(lesson=>({id:lesson.id,weight:1,title:'You learned something useful',script:`SYSTEM: ${lesson.text}`,effects:[{id:`lesson-${lesson.id}`,timing:'immediate',type:'lesson',value:lesson.text,label:'Product systems lesson'}]}))
 });
 
 registerActivity({
   id:'photo',name:'Photography walk',location:'Market streets',durationMinutes:90,
-  cost:{cash:50,energy:1},preview:{description:'Take a hike with friends and look at the world differently.'},presentation:{inheritWorldBackground:true,sceneClass:'activity-photo'},
+  cost:{cash:50,energy:1},preview:{description:'Take a hike with friends and look at the world differently.'},presentation:{background:'assets/scenes/founder-vibe-coding/generated/ACT-PHOTO-02-nature-trail-landscape-shot-v2.png',sceneClass:'activity-photo'},
   script:'NARRATOR: Went on a hike with some friends.\nNARRATOR: Took some selfies and pictures too!',
   eventTable:[{id:'inspiration',weight:1,title:'Inspiration received!',script:'SYSTEM: Inspiration received!',effects:[{id:'changing-light-test',timing:'immediate',type:'test-unlock',value:'changing-light-photo',label:'New photo test unlocked'}]}]
 });
 
 registerActivity({
   id:'grandma',name:'Call Grandma',location:'Phone call',durationMinutes:60,
-  cost:{cash:0,energy:1},preview:{description:'Make time for a family call.'},presentation:{inheritWorldBackground:true,sceneClass:'activity-grandma',characters:[{id:'grandma',name:'Grandma',asset:ASSET.grandma,side:'left',alt:'Grandma on a video call'}]},
+  cost:{cash:0,energy:1},preview:{description:'Make time for a family call.'},presentation:{background:'assets/scenes/founder-vibe-coding/generated/ACT-GRANDMA-01-joyful-video-call-v1.png',sceneClass:'activity-grandma'},
   script:'NARRATOR: You call Grandma for a fun chat filled with laughter.',
   eventTable:[{id:'whatsapp-referrals',weight:1,title:'Grandma has been talking',script:'NARRATOR: Apparently she told her senior citizen WhatsApp group about you!',effects:[{id:'word-of-mouth',timing:'settlement',type:'users',amount:4,label:'Grandma’s WhatsApp referrals'}]}]
 });
@@ -530,6 +530,12 @@ const DAY8_TASKS = {
   }
 };
 
+/* The public two-day slice has one supported customer problem per day. The
+   larger task catalog remains available to internal experiments, but exposing
+   it here would route players back into superseded ORACLE interfaces. */
+const PUBLIC_DAY7_TASKS = Object.freeze({glare:DAY7_TASKS.glare});
+const PUBLIC_DAY8_TASKS = Object.freeze({offline:DAY7_TASKS.offline});
+
 const SLOT_QUESTION = {goal:'What should it do?',context:'When does it happen?',success:'How do we know it worked?',guardrail:'What must it never do?'};
 const questionFor = (t,slot) => t?.questions?.[slot] || QUESTIONS.find(q=>q.slot===slot)?.q || SLOT_QUESTION[slot];
 
@@ -586,7 +592,7 @@ function startPlayerAnimation(mode, force=false){
 
 /* ---------- derived ---------- */
 const day7 = () => S.day === 7;
-const taskSet = () => day7() ? DAY7_TASKS : DAY8_TASKS;
+const taskSet = () => day7() ? PUBLIC_DAY7_TASKS : PUBLIC_DAY8_TASKS;
 const task = () => taskSet()[S.selectedTaskId] || null;
 const dailyRevenue = () => S.users * REV_PER_USER_DAY;
 const dailyProductResult = () => dailyRevenue() - S.aiDaily;
@@ -775,6 +781,33 @@ function loopPhase(){if(!S.morningDone)return'morning';if(!S.selectedTaskId)retu
 
 function allPassed(){return !!task() && !!S.build && S.tested && S.testResults.length>0 && S.testResults.filter(r=>!r.skipped).every(r=>r.pass);}
 
+function nextStationKey(){
+  if(!S.morningDone||!S.selectedTaskId)return null;
+  if(!S.build)return'oracle';
+  if(S.build.kind==='oracle-v2'){
+    if(['build','customer-pass','second-result','diagnosis','patch'].includes(S.oracleV2.stage))return'test';
+    if(['revised','release'].includes(S.oracleV2.stage))return'oracle';
+  }
+  if(S.build.kind==='oracle-v2-day8'){
+    if(!S.tested||S.oracleDay8.stage==='build')return'test';
+    if(S.oracleDay8.stage==='result')return'oracle';
+  }
+  if(!S.tested||!allPassed())return'test';
+  if(!S.shipped)return'door';
+  return null;
+}
+
+function nextActionHint(){
+  const next=nextStationKey();
+  if(!S.morningDone)return'Read the overnight message to begin.';
+  if(!S.selectedTaskId)return'Open today’s customer request.';
+  if(next==='oracle')return S.build?'Next: ORACLE Studio — review the evidence and record the release.':'Next: ORACLE Studio — turn the customer request into a saved build.';
+  if(next==='test')return`Next: Test Bench — Dev has ${day7()?'the customer photo':'Westside Clinic’s outage replay'} ready.`;
+  if(next==='door')return'Next: Event / Release — choose how the tested build reaches people.';
+  if(S.shipped)return'Release recorded. End the day when you are ready to settle the books.';
+  return'Choose a station to continue.';
+}
+
 function render(){
   const net = dailyProductResult(), t = task();
   $('hud-day').textContent = `${String(S.day).padStart(2,'0')} · ${timeText()}`;
@@ -801,6 +834,7 @@ function render(){
     ? `<b>${t.person} · ${t.title}</b>${t.problem}<div style="margin-top:6px"><strong>If skipped:</strong> ${t.ignoreLine}</div><div><strong>${eventName(t)} · ${clockText(eventDeadline(t))}:</strong> ${t.payoffLine}</div>`
     : `<b>Today’s stake</b>${S.morningDone?'Pick whose problem gets today at the product board (any station).':'Read the overnight message first.'}`;
   $('game-title').textContent = `Garage HQ · Day ${S.day}`;
+  $('game-subtitle').textContent = nextActionHint();
   $('phase-pill').textContent = loopPhase().toUpperCase();
   $('end-day').disabled = !S.morningDone || S.gameOver;
   $('end-day').textContent = S.settled?'View day result':'End day';
@@ -824,6 +858,13 @@ function updateStations(){
   door.classList.toggle('done',S.shipped);
   const deadline=eventDeadline(task());
   door.querySelector('small').textContent = !S.build?'build something first':S.shipped?'released today · end day to reconcile':S.demoAttended?'event done · release open':S.time+1>deadline?`${eventName(task())} closed · release open`:`${eventName(task())} closes ${clockText(deadline)}`;
+  const recommended=nextStationKey();
+  document.querySelectorAll('[data-station]').forEach(station=>{
+    const isNext=station.dataset.station===recommended;
+    station.classList.toggle('recommended',isNext);
+    if(isNext)station.setAttribute('aria-current','step');
+    else station.removeAttribute('aria-current');
+  });
 }
 
 function updateNearest(){S.nearest=null;}
@@ -943,7 +984,8 @@ function taskEconomyPreview(t){
 
 function showTaskBoard(){
   const set = taskSet(), ids = Object.keys(set);
-  openModal(`<div class="modal-head"><div><div class="micro">Product board · day ${S.day}</div><h2 id="modal-title">Which problem gets today?</h2><p>Choose one product priority. Some cards improve an existing product; a card marked “New product” starts a separate app. You may revise, rebuild, and retest while time and resources remain.</p></div></div>
+  const focused=ids.length===1;
+  openModal(`<div class="modal-head"><div><div class="micro">Product board · day ${S.day}</div><h2 id="modal-title">${focused?'Today’s customer request':'Which problem gets today?'}</h2><p>${focused?'This focused public slice follows one ClearRead request from customer report through build, test, release, and settlement.':'Choose one product priority. You may revise, rebuild, and retest while time and resources remain.'}</p></div></div>
   <div class="modal-body"><div class="task-grid">${ids.map((id,i)=>{const t=set[id];return `
     <article class="task-card ${i===0?'featured':''}">
       <div class="task-art" style="background-position:${(t.art%3)*50}% ${t.art>2?100:0}%;background-image:url('${ASSET.taskArt}')"></div>
@@ -1206,7 +1248,7 @@ function showOracleDay8V2(){
 function showOracleDay8QuestionV2(){
   oracleV2Shell({art:ASSET.oracle,eyebrow:'ORACLE STUDIO · DAY 8 · FOCUSED UPDATE',title:'What should ClearRead do when the clinic loses Wi-Fi?',
     lede:`ClearRead ${S.oracleV2.release?.version||S.productVersion} and yesterday’s four behaviors are still live. Today’s request adds one offline rule; it does not replace the saved product.`,
-    body:'<div class="phone-msg"><span class="from">WESTSIDE CLINIC</span><span class="when">08:42</span><p>“The Wi-Fi dropped during appointments. Fourteen patients lost label reading.”</p></div>',
+    body:'<div class="phone-msg"><span class="from">WESTSIDE CLINIC</span><span class="when">08:42</span><p>“The Wi-Fi dropped during appointments. Fourteen patients lost label reading.”</p></div><div class="oracle-v2-dev"><b>Dev:</b> “I queued their outage replay at the Test Bench. Choose what ClearRead should do offline, build it, and we’ll cut the connection to check your exact rule.”</div>',
     choices:ORACLE_DAY8_OPTIONS.map(o=>`<button class="oracle-v2-choice" data-day8-v2="${o.id}"><strong>${o.label}</strong><span>${o.note}</span></button>`).join(''),
     footer:'<button class="btn" id="day8-v2-back">Back to Garage HQ</button>'});
   $('day8-v2-back').onclick=closeModal;
