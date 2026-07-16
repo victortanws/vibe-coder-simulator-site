@@ -40,18 +40,6 @@ const isNewProduct = t => /^New app\b/i.test(t.type);
 const productScope = t => `${isNewProduct(t)?'New product':'Existing product'} · ${t.app}`;
 const taskButtonLabel = t => isNewProduct(t)?`Prototype ${t.app}`:`Work on this ${t.app} problem`;
 
-const ACTIVITY_LESSONS = Object.freeze([
-  {id:'technical-debt',text:'Technical debt is future work created when today’s shortcut becomes tomorrow’s constraint.'},
-  {id:'test-boundary',text:'A test proves the case it actually ran—not every nearby case.'},
-  {id:'observable-requirement',text:'“What should the user observe?” is stronger than “make it smart.”'},
-  {id:'reproduce-first',text:'Reproducing a bug turns a mystery into a task.'},
-  {id:'persistent-state',text:'Product state should survive closing and reopening the interface.'},
-  {id:'cache-lifetime',text:'Cached data needs an explicit owner and lifetime.'},
-  {id:'usage-economics',text:'Usage-based costs scale with users, not merely with builds.'},
-  {id:'release-versus-result',text:'A release records a decision; the market result happens later.'},
-  {id:'fallback',text:'A good fallback states what the software cannot do instead of inventing an answer.'}
-]);
-
 const ACTIVITIES = Object.create(null);
 const ACTIVITY_SYSTEM_SPEAKERS = new Set(['NARRATOR','SYSTEM']);
 
@@ -101,7 +89,7 @@ function activityAuthoringIssues(definition){
   if(!String(definition.script||'').trim())ask('script','Provide the authored script. Use “SPEAKER: dialogue” on each line and “---” for an intentional screen break.');
   if(!Array.isArray(definition.eventTable)||!definition.eventTable.length)ask('eventTable','Paste a JSON array with at least one response row: [{"id":"result","weight":1,"title":"Result","script":"SYSTEM: What happened.","effects":[]}].');
   const presentation=definition.presentation||{};
-  if(!presentation.background&&!presentation.inheritWorldBackground)ask('presentation.background','Provide a background/image asset path, or explicitly set inheritWorldBackground: true.');
+  if(!presentation.background&&!presentation.backgrounds?.length&&!presentation.inheritWorldBackground)ask('presentation.background','Provide an approved background asset or an approved background pool, or explicitly set inheritWorldBackground: true.');
   const scriptSpeakers=compileActivityScript(definition.script).map(screen=>screen.speaker).filter(speaker=>!ACTIVITY_SYSTEM_SPEAKERS.has(speaker.toUpperCase()));
   const castNames=new Set((presentation.characters||[]).map(character=>String(character.name||character.id||'').toUpperCase()));
   [...new Set(scriptSpeakers)].filter(speaker=>!castNames.has(speaker.toUpperCase())).forEach(speaker=>ask(`presentation.characters.${speaker}`,`Provide an approved character asset for ${speaker}, or rewrite that line as NARRATOR/SYSTEM if the character remains offscreen.`));
@@ -147,13 +135,22 @@ function addActivity(input,options={promptForMissing:true}){
     if(!/^[a-z0-9-]+$/.test(row.id||'')||!(Number(row.weight)>0)||!String(row.script||'').trim())throw new TypeError(`Activity ${definition.id} has an invalid response-table row.`);
     return Object.freeze({...row,weight:Number(row.weight),screens:Object.freeze(compileActivityScript(row.script)),effects:Object.freeze((row.effects||[]).map(normalizeEffect))});
   });
-  const presentation={inheritWorldBackground:false,sceneClass:'',background:'',characters:[],...definition.presentation};
+  const presentation={inheritWorldBackground:false,sceneClass:'',background:'',backgrounds:[],characters:[],...definition.presentation};
   const normalized=Object.freeze({
     ...definition,
     cost:Object.freeze({cash:Number(cost.cash||0),energy:Number(cost.energy||0)}),
     preview:Object.freeze({...definition.preview}),
     scriptScreens:Object.freeze(compileActivityScript(definition.script)),
-    presentation:Object.freeze({...presentation,characters:Object.freeze((presentation.characters||[]).map(character=>Object.freeze({...character})))}),
+    presentation:Object.freeze({
+      ...presentation,
+      backgrounds:Object.freeze([...(presentation.backgrounds||[])]),
+      assets:Object.freeze((presentation.assets||[]).map(asset=>Object.freeze({
+        ...asset,
+        tags:Object.freeze([...(asset.tags||[])]),
+        composition:Object.freeze({...asset.composition})
+      }))),
+      characters:Object.freeze((presentation.characters||[]).map(character=>Object.freeze({...character})))
+    }),
     eventTable:Object.freeze(eventTable)
   });
   ACTIVITIES[definition.id]=normalized;
@@ -161,46 +158,9 @@ function addActivity(input,options={promptForMissing:true}){
 }
 
 const registerActivity=definition=>addActivity(definition,{promptForMissing:false});
-
-registerActivity({
-  id:'workout',name:'Work out',location:'Neighborhood gym',durationMinutes:60,
-  cost:{cash:20,energy:0},preview:{description:'Step away from the laptop and reset.'},presentation:{background:'assets/scenes/founder-vibe-coding/generated/ACT-WORKOUT-01-gym-strength-partner-v4.png',sceneClass:'activity-workout'},
-  script:'NARRATOR: You go and get swole in the gym because “mind over body” is a lie.',
-  eventTable:[{id:'recovery',weight:1,title:'Energy +2!',script:'SYSTEM: Energy +2!',effects:[{id:'energy-gain',timing:'immediate',type:'energy',amount:2,label:'Workout recovery'}]}]
-});
-
-registerActivity({
-  id:'meetup',name:'Community demo night',location:'Founder Commons',durationMinutes:90,
-  cost:{cash:0,energy:2},preview:{description:'Show ClearRead to a small room of founders.'},presentation:{background:'assets/scenes/founder-vibe-coding/generated/ACT-DEMO-02-founder-microphone-pitch-v2.png',sceneClass:'stage'},
-  script:'NARRATOR: You talk about your app to a small and cozy room of founders.',
-  eventTable:[
-    {id:'quiet-room',weight:1,title:'A very honest room',script:'NARRATOR: Half their eyes glaze over. One person shouts, “ANOTHER VIBE-CODED APP?!” Nobody donates tonight.',effects:[{id:'donation',timing:'settlement',type:'cash',amount:0,monetary:true,label:'Community demo donation'}]},
-    {id:'twenty',weight:1,title:'One person gets it',script:'NARRATOR: Half their eyes glaze over. One person shouts, “ANOTHER VIBE-CODED APP?!” One founder stays behind and donates $20.',effects:[{id:'donation',timing:'settlement',type:'cash',amount:20,monetary:true,label:'Community demo donation'}]},
-    {id:'forty',weight:1,title:'One of them was legit',script:'NARRATOR: Half their eyes glaze over. One person shouts, “ANOTHER VIBE-CODED APP?!” But one of them was legit and donated $40!',effects:[{id:'donation',timing:'settlement',type:'cash',amount:40,monetary:true,label:'Community demo donation'}]},
-    {id:'sixty',weight:1,title:'The room surprises you',script:'NARRATOR: Half their eyes glaze over. One person shouts, “ANOTHER VIBE-CODED APP?!” Two founders pool together and donate $60.',effects:[{id:'donation',timing:'settlement',type:'cash',amount:60,monetary:true,label:'Community demo donation'}]}
-  ]
-});
-
-registerActivity({
-  id:'class',name:'Product systems class',location:'Community classroom',durationMinutes:120,
-  cost:{cash:100,energy:3},preview:{description:'Trade an evening for one practical product lesson.'},presentation:{background:'assets/scenes/founder-vibe-coding/generated/ACT-CLASS-01-high-tech-lecture-focused-v3.png',sceneClass:'activity-class'},
-  script:'NARRATOR: You went for a product systems class!',
-  eventTable:ACTIVITY_LESSONS.map(lesson=>({id:lesson.id,weight:1,title:'You learned something useful',script:`SYSTEM: ${lesson.text}`,effects:[{id:`lesson-${lesson.id}`,timing:'immediate',type:'lesson',value:lesson.text,label:'Product systems lesson'}]}))
-});
-
-registerActivity({
-  id:'photo',name:'Photography walk',location:'Market streets',durationMinutes:90,
-  cost:{cash:50,energy:1},preview:{description:'Take a hike with friends and look at the world differently.'},presentation:{background:'assets/scenes/founder-vibe-coding/generated/ACT-PHOTO-02-nature-trail-landscape-shot-v2.png',sceneClass:'activity-photo'},
-  script:'NARRATOR: Went on a hike with some friends.\nNARRATOR: Took some selfies and pictures too!',
-  eventTable:[{id:'inspiration',weight:1,title:'Inspiration received!',script:'SYSTEM: Inspiration received!',effects:[{id:'changing-light-test',timing:'immediate',type:'test-unlock',value:'changing-light-photo',label:'New photo test unlocked'}]}]
-});
-
-registerActivity({
-  id:'grandma',name:'Call Grandma',location:'Phone call',durationMinutes:60,
-  cost:{cash:0,energy:1},preview:{description:'Make time for a family call.'},presentation:{background:'assets/scenes/founder-vibe-coding/generated/ACT-GRANDMA-01-joyful-video-call-v1.png',sceneClass:'activity-grandma'},
-  script:'NARRATOR: You call Grandma for a fun chat filled with laughter.',
-  eventTable:[{id:'whatsapp-referrals',weight:1,title:'Grandma has been talking',script:'NARRATOR: Apparently she told her senior citizen WhatsApp group about you!',effects:[{id:'word-of-mouth',timing:'settlement',type:'users',amount:4,label:'Grandma’s WhatsApp referrals'}]}]
-});
+const activityDefinitions=Array.isArray(window.VCS_ACTIVITY_DATA)?window.VCS_ACTIVITY_DATA:[];
+if(!activityDefinitions.length)throw new Error('Activity catalogue did not load. Generate js/activity-data.generated.js from data/activities.json.');
+activityDefinitions.forEach(registerActivity);
 
 /* ---------- seeded RNG (real randomness, reproducible per build) ---------- */
 function mulberry32(seed){return function(){seed|=0;seed=seed+0x6D2B79F5|0;let t=Math.imul(seed^seed>>>15,1|seed);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
@@ -558,6 +518,7 @@ const initialState = () => ({
   demoAttended:false, demoResult:'',
   activityIds:[], activitySpend:0, activitySeed:Math.floor(Math.random()*0xFFFFFFFF),
   activityResults:{}, activityLedger:[], postedActivityEntries:{}, learnedLessons:[], unlockedTests:[],
+  storyFlags:[],
   // consequences ledger
   exposures:[], trustPenalty:0, fitAtShip:'closed', _blewOvernight:false,
   // day accounting
@@ -624,11 +585,39 @@ function activityHash(value){
 }
 
 function chooseActivityEvent(activity){
-  if(!activity.eventTable.length)return null;
+  const available=activity.eventTable.filter(row=>activityAssetsForEvent(activity,row).length);
+  if(!available.length)return null;
   const rng=mulberry32((S.activitySeed^activityHash(`${S.day}:${activity.id}`))>>>0);
-  const total=activity.eventTable.reduce((sum,row)=>sum+row.weight,0);
+  const total=available.reduce((sum,row)=>sum+row.weight,0);
   let cursor=rng()*total;
-  return activity.eventTable.find(row=>((cursor-=row.weight)<=0))||activity.eventTable[activity.eventTable.length-1];
+  return available.find(row=>((cursor-=row.weight)<=0))||available[available.length-1];
+}
+
+function activityAssetAvailable(asset){
+  if(!asset||asset.status!=='approved'||asset.composition?.faceSafe!==true)return false;
+  if(asset.requiresFlag&&!S.storyFlags.includes(asset.requiresFlag))return false;
+  if(asset.retireWhenFlag&&S.storyFlags.includes(asset.retireWhenFlag))return false;
+  return true;
+}
+
+function activityAssetsForEvent(activity,event){
+  const approved=(activity.presentation.assets||[]).filter(activityAssetAvailable);
+  const required=event?.assetTags||[];
+  return required.length?approved.filter(asset=>required.every(tag=>asset.tags.includes(tag))):approved;
+}
+
+function chooseActivityAsset(activity,event){
+  const pool=activityAssetsForEvent(activity,event);
+  if(!pool.length)return null;
+  const rng=mulberry32((S.activitySeed^activityHash(`${S.day}:${activity.id}:art`))>>>0);
+  return pool[Math.floor(rng()*pool.length)]||pool[0];
+}
+
+function chooseActivityBackground(activity,event){
+  const asset=chooseActivityAsset(activity,event);
+  if(asset)return asset.path;
+  const pool=activity.presentation.backgrounds?.length?activity.presentation.backgrounds:[activity.presentation.background].filter(Boolean);
+  return pool[0]||'';
 }
 
 function recordActivityEntry(activity,effectId,resource,amount,timing,label,detail='',metadata={}){
@@ -687,7 +676,10 @@ function activityImpact(activity){
   const energy=entries.filter(entry=>entry.resource==='energy').reduce((sum,entry)=>sum+entry.amount,0);
   const notes=[];
   if(result?.eventText)notes.push(result.eventText);
-  entries.filter(entry=>entry.resource==='lesson'||entry.resource==='test-unlock').forEach(entry=>notes.push(entry.detail||entry.label));
+  entries.filter(entry=>entry.resource==='lesson'||entry.resource==='test-unlock').forEach(entry=>{
+    const note=entry.detail||entry.label;
+    if(note&&!notes.some(existing=>existing.includes(note)||note.includes(existing)))notes.push(note);
+  });
   if(energy)notes.push(`Energy ${energy>0?'+':''}${energy}.`);
   return `<div class="impact"><b>Outside activity · ${activity.name}</b>${notes.join(' ')||'Completed and recorded.'}</div>`;
 }
@@ -710,7 +702,9 @@ function advanceTime(hours){
   const actual = Math.max(0, Math.min(hours, 24 - S.time));
   const fraction = actual / OPERATING_HOURS;
   const rev = dailyRevenue() * fraction, ai = S.aiDaily * fraction;
-  S.opRevenue += rev; S.opAI += ai; S.cash += rev - ai; S.time += actual;
+  // Operations accrue while time passes, but Cash posts once at End Day.
+  // This keeps the HUD calm and gives settlement one accounting authority.
+  S.opRevenue += rev; S.opAI += ai; S.time += actual;
 }
 
 function toast(message){$('toast').textContent=message;$('toast').classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').classList.remove('show'),2600);}
@@ -773,8 +767,12 @@ const collisionShapes = [
 ];
 const collisionAt=(x,y)=>collisionShapes.find(r=>x>=r.x1&&x<=r.x2&&y>=r.y1&&y<=r.y2);
 
-function openModal(content, closable=true){$('overlay').hidden=false;$('modal').innerHTML=content;if(closable)$('modal').querySelectorAll('[data-close]').forEach(close=>close.onclick=closeModal);}
-function closeModal(){$('overlay').hidden=true;$('modal').innerHTML='';render();}
+function notifyModalState(open){
+  try{window.top.postMessage({type:'vcs-modal-state',open},'*');}catch{}
+}
+function openModal(content, closable=true){$('overlay').hidden=false;$('modal').innerHTML=content;if(closable)$('modal').querySelectorAll('[data-close]').forEach(close=>close.onclick=closeModal);notifyModalState(true);}
+function closeModal(){$('overlay').hidden=true;$('modal').innerHTML='';notifyModalState(false);render();}
+window.VCSPrototype=Object.freeze({closeModal:()=>{if(!$('overlay').hidden)closeModal();},isModalOpen:()=>!$('overlay').hidden});
 function resourceBar(){return `<div class="resource-bar" aria-label="Resources before this action"><span>Cash <b>${plainMoney(S.cash)}</b></span><span>AI credits <b>${Math.floor(S.credits)} ⚡</b></span><span>Energy <b>${S.energy}/5</b></span><span>Clock <b>${timeText()}</b></span></div>`;}
 
 function loopPhase(){if(!S.morningDone)return'morning';if(!S.selectedTaskId)return'choose';if(!S.build)return'build';if(!allPassed())return'test';if(!S.shipped)return'ship';return'settle';}
@@ -986,7 +984,7 @@ function showTaskBoard(){
   const set = taskSet(), ids = Object.keys(set);
   const focused=ids.length===1;
   openModal(`<div class="modal-head"><div><div class="micro">Product board · day ${S.day}</div><h2 id="modal-title">${focused?'Today’s customer request':'Which problem gets today?'}</h2><p>${focused?'This focused public slice follows one ClearRead request from customer report through build, test, release, and settlement.':'Choose one product priority. You may revise, rebuild, and retest while time and resources remain.'}</p></div></div>
-  <div class="modal-body"><div class="task-grid">${ids.map((id,i)=>{const t=set[id];return `
+  <div class="modal-body"><div class="task-grid ${focused?'single-task':''}">${ids.map((id,i)=>{const t=set[id];return `
     <article class="task-card ${i===0?'featured':''}">
       <div class="task-art" style="background-position:${(t.art%3)*50}% ${t.art>2?100:0}%;background-image:url('${ASSET.taskArt}')"></div>
       <div class="inner">
@@ -1000,8 +998,10 @@ function showTaskBoard(){
         <button class="btn ${i===0?'primary':'cyan'}" data-task="${id}">${taskButtonLabel(t)}</button>
       </div>
     </article>`;}).join('')}</div>
+    <div class="modal-actions"><button class="btn" id="defer-product-request">Not today — return to Garage HQ</button></div>
   </div>`, false);
   $('modal').querySelectorAll('[data-task]').forEach(b=>b.onclick=()=>chooseTask(b.dataset.task));
+  $('defer-product-request').onclick=()=>{closeModal();$('world-message').textContent='Today’s customer request is still open. Choose it later, use the rest of the day, or end the day.';toast('Request deferred · no product selected');};
 }
 
 function chooseTask(id){
@@ -1275,17 +1275,22 @@ function showOracleDay8BriefV2(){
 
 function showOracleDay8PurchaseConfirm(){
   const beforeCash=S.cash,beforeCredits=S.credits,cost=ORACLE_DAY8_COSTS.build;
+  const shortfall=Math.max(0,DAY8_PACK_PRICE-beforeCash),canAfford=!shortfall;
   oracleV2Shell({art:ASSET.oracleBuild,artClass:'build',eyebrow:'CONFIRM · DAY 8 CREDIT PURCHASE',title:'Spend $180 on the update package?',
     lede:'Nothing is spent until you confirm. Cancelling returns to the build plan without changing Cash, Credits, Energy, or time.',
-    body:`<div class="oracle-v2-result"><strong>Cash</strong><span>${plainMoney(beforeCash)} → ${plainMoney(beforeCash-DAY8_PACK_PRICE)}</span></div><div class="oracle-v2-result"><strong>Prepaid AI Credits after the build</strong><span>${Math.floor(beforeCredits)} + ${CREDIT_PACK} − ${cost.credits} = ${Math.floor(beforeCredits+CREDIT_PACK-cost.credits)} Credits</span></div>`,
-    choices:`<button class="oracle-v2-choice primary" id="day8-v2-confirm"><strong>Buy Credits and build the update</strong><span>${cost.hours} hour · ${cost.energy} Energy · clinic test remains ready at the Test Bench</span></button>`,
+    body:`<div class="oracle-v2-result"><strong>Cash</strong><span>${plainMoney(beforeCash)} → ${plainMoney(beforeCash-DAY8_PACK_PRICE)}</span></div><div class="oracle-v2-result"><strong>Prepaid AI Credits after the build</strong><span>${Math.floor(beforeCredits)} + ${CREDIT_PACK} − ${cost.credits} = ${Math.floor(beforeCredits+CREDIT_PACK-cost.credits)} Credits</span></div>${canAfford?'':`<div class="inline-notice">You are ${plainMoney(shortfall)} short. Earn or preserve more Cash before buying this update.</div>`}`,
+    choices:`<button class="oracle-v2-choice primary" id="day8-v2-confirm" ${canAfford?'':'disabled'}><strong>Buy Credits and build the update</strong><span>${cost.hours} hour · ${cost.energy} Energy · clinic test remains ready at the Test Bench</span></button>`,
     footer:'<button class="btn" id="day8-v2-confirm-cancel">Cancel</button>'});
   $('day8-v2-confirm-cancel').onclick=showOracleDay8BriefV2;
   $('day8-v2-confirm').onclick=saveOracleDay8Build;
 }
 
 function saveOracleDay8Build(){
-  const cost=ORACLE_DAY8_COSTS.build;if(S.build?.kind==='oracle-v2-day8'||S.cash<DAY8_PACK_PRICE||S.energy<cost.energy||S.time+cost.hours>24)return;
+  const cost=ORACLE_DAY8_COSTS.build;
+  if(S.build?.kind==='oracle-v2-day8')return;
+  if(S.cash<DAY8_PACK_PRICE){toast(`Not enough Cash · need ${plainMoney(DAY8_PACK_PRICE)}, have ${plainMoney(S.cash)}`);return;}
+  if(S.energy<cost.energy){toast(`Not enough Energy · need ${cost.energy}`);return;}
+  if(S.time+cost.hours>24){toast('Not enough time remains today.');return;}
   S.cash-=DAY8_PACK_PRICE;S.credits+=CREDIT_PACK;S.purchaseSpend+=DAY8_PACK_PRICE;
   if(S.credits<cost.credits)return;S.credits-=cost.credits;S.energy-=cost.energy;advanceTime(cost.hours);S.productVersion='0.8.0';S.version=8;
   S.build={kind:'oracle-v2-day8',behaviors:[...S.oracleV2.behaviors,S.oracleDay8.behavior],cost:cost.credits,instruction:S.oracleDay8.behavior,defect:false};
@@ -1394,14 +1399,14 @@ function showBuildChoice(){
     <div class="build-choice">
       <div class="build-card">
         <h3>Quick build</h3>
-        <div class="price">${quick.credits} prepaid ⚡ · ${quick.hours}h · ${quick.energy} Energy · operating cash ${money(operatingCashFor(quick.hours))}</div>
+        <div class="price">${quick.credits} prepaid ⚡ · ${quick.hours}h · ${quick.energy} Energy</div>
         <p>“The cheap way. Plainly: a quick build is <b>more likely to leave a coding bug</b> — even in behaviors you chose correctly. We’ll only know when we test.”</p>
         <p style="font-size:12px;color:var(--muted)">If a bug slips through: finding it costs a test run (30 ⚡ · 1h · 1 Energy), and fixing it costs another generated build. A late bug can cost you the ${clockText(eventDeadline(t))} customer event.</p>
         <button class="btn cyan" id="build-quick" ${quickRepeat||S.credits<quick.credits||S.energy<quick.energy||S.time+quick.hours>24?'disabled':''}>${quickRepeat?'Already saved — test this build':'Buy the quick build'}</button>
       </div>
       <div class="build-card careful">
         <h3>Careful build</h3>
-        <div class="price">${careful.credits} prepaid ⚡ · ${careful.hours}h · ${careful.energy} Energy · operating cash ${money(operatingCashFor(careful.hours))}</div>
+        <div class="price">${careful.credits} prepaid ⚡ · ${careful.hours}h · ${careful.energy} Energy</div>
         <p>“Twice the price. I take my time and check my own work — a coding bug is very unlikely.”</p>
         <p style="font-size:12px;color:var(--muted)">Buys code quality only. It cannot add a behavior that the brief never requested.</p>
         <button class="btn primary" id="build-careful" ${carefulRepeat||S.credits<careful.credits||S.energy<careful.energy||S.time+careful.hours>24?'disabled':''}>${carefulRepeat?'Already saved — test this build':'Buy the careful build'}</button>
@@ -1512,12 +1517,12 @@ function showDay8BuildChoice(){
     <div class="prompt-readback"><span class="slot-label">GENERATED BUILD BRIEF</span>${promptSentence()}</div>
     <div class="build-choice">
       <div class="build-card"><h3>Standard build</h3>
-        <div class="price">${standard.credits} prepaid ⚡ · ${standard.hours}h · ${standard.energy} Energy · operating cash ${money(operatingCashFor(standard.hours))}</div>
+        <div class="price">${standard.credits} prepaid ⚡ · ${standard.hours}h · ${standard.energy} Energy</div>
         <p>ORACLE generates the code once. Your four requirements remain exactly as written; the Test Bench reveals whether the implementation needs another pass.</p>
         <button class="btn cyan" id="build-standard" ${standardRepeat||coverageCount()<1||S.credits<standard.credits||S.energy<standard.energy||S.time+standard.hours>24?'disabled':''}>${standardRepeat?'Already saved — test this build':'Buy the Standard build'}</button>
       </div>
       <div class="build-card careful"><h3>Reviewed build</h3>
-        <div class="price">${reviewed.credits} prepaid ⚡ · ${reviewed.hours}h · ${reviewed.energy} Energy · operating cash ${money(operatingCashFor(reviewed.hours))}</div>
+        <div class="price">${reviewed.credits} prepaid ⚡ · ${reviewed.hours}h · ${reviewed.energy} Energy</div>
         <p>ORACLE generates the same brief, then checks the implementation before returning it. This buys code review; it cannot invent a requirement you left out.</p>
         <button class="btn primary" id="build-reviewed" ${reviewedRepeat||coverageCount()<1||S.credits<reviewed.credits||S.energy<reviewed.energy||S.time+reviewed.hours>24?'disabled':''}>${reviewedRepeat?'Already saved — test this build':'Buy the Reviewed build'}</button>
       </div>
@@ -1613,7 +1618,7 @@ function showTest(){
   if(!S.build){openModal(`<div class="modal-head"><div><div class="micro">Test bench</div><h2 id="modal-title">Nothing to test yet</h2><p>Describe the build at ORACLE first — the tests replay the incident against whatever you actually asked for.</p></div><button class="close" data-close>×</button></div><div class="modal-body"><div class="modal-actions"><button class="btn primary" id="go-oracle">Walk to ORACLE</button></div></div>`);$('modal').querySelector('[data-close]').onclick=closeModal;$('go-oracle').onclick=()=>{closeModal();autoWalk('oracle');};return;}
   if(!S.tested){
     const rows=runTestRows(),cost=30;
-    openModal(`<div class="modal-head"><div><div class="micro">Test bench · ${task().app} · build v${S.version}</div><h2 id="modal-title">Replay the incident</h2><p>${task().person}’s case, re-run against the saved build · ${cost} prepaid ⚡ · 1 Energy · 1 hour · operating cash ${money(operatingCashFor(1))}.</p>${resourceBar()}</div><button class="close" data-close>×</button></div>
+    openModal(`<div class="modal-head"><div><div class="micro">Test bench · ${task().app} · build v${S.version}</div><h2 id="modal-title">Replay the incident</h2><p>${task().person}’s case, re-run against the saved build · ${cost} prepaid ⚡ · 1 Energy · 1 hour.</p>${resourceBar()}</div><button class="close" data-close>×</button></div>
     <div class="modal-body">
       <div class="test-list">${rows.map(x=>`<div class="test-row"><span class="icon">○</span><div><b>${x.name}</b><small>${x.detail}</small></div><strong>NOT RUN</strong></div>`).join('')}</div>
       <div class="plain-rule">Two different ways to miss here: a product behavior absent from the build brief, or an implementation defect in a behavior you selected. The results identify which one happened and route you to the right fix.</div>
@@ -1681,33 +1686,34 @@ function chooseActivity(id){
   if(!a)return;
   const cashCost=activityCashCost(a),hours=activityHours(a);
   if(didActivity(id)||!activityAvailable(a,t)||S.cash<cashCost||S.energy<a.cost.energy||S.time+hours>24)return;
+  const event=chooseActivityEvent(a);
+  if(!event){toast('No approved scene is available for this activity yet.');return;}
   const before={cash:S.cash,energy:S.energy};
   S.cash-=cashCost;S.activitySpend+=cashCost;
   recordActivityEntry(a,'direct-cost','cash',-cashCost,'immediate',`${a.name} direct cost`);
   if(a.cost.energy){S.energy-=a.cost.energy;recordActivityEntry(a,'energy-cost','energy',-a.cost.energy,'immediate',`${a.name} Energy`);}
   advanceTime(hours);S.activityIds.push(id);
-  const event=chooseActivityEvent(a);
   recordActivityEntry(a,`event:${event.id}`,'event',0,'immediate',event.title,event.screens.map(screen=>screen.text).join(' '),{eventId:event.id,eventTitle:event.title,script:event.screens.map(screen=>`${screen.speaker}: ${screen.text}`)});
   event.effects.forEach((effect,index)=>applyActivityEffect(a,effect,event,index));
-  S.activityResults[id]=Object.freeze({activityId:id,eventId:event.id,eventTitle:event.title,eventText:activitySceneText(event.screens.map(screen=>screen.text).join(' ')),inflationMultiplier:activityInflation()});
+  const selectedAsset=chooseActivityAsset(a,event),background=selectedAsset?.path||chooseActivityBackground(a,event);
+  S.activityResults[id]=Object.freeze({activityId:id,eventId:event.id,eventTitle:event.title,eventText:activitySceneText(event.screens.map(screen=>screen.text).join(' ')),assetId:selectedAsset?.id||'',assetEmotion:selectedAsset?.emotion||'',background,inflationMultiplier:activityInflation()});
   closeModal();
-  $('world-message').textContent=`Outside activity complete: ${a.name}. The result is recorded for End Day.`;
+  $('world-message').textContent=`Outside activity complete: ${a.name}.`;
   toast(`${a.name} · cash ${plainMoney(before.cash)} → ${plainMoney(S.cash)} · Energy ${before.energy} → ${S.energy}`);
-  const pages=[...a.scriptScreens.map((screen,index)=>({speaker:screen.speaker,title:index===0?a.name:'',html:`<p>${activitySceneText(screen.text)}</p>`})),...event.screens.map((screen,index)=>({speaker:screen.speaker,title:index===0?event.title:'',html:`<p>${activitySceneText(screen.text)}</p>${event.effects.some(effect=>effect.timing==='settlement')?'<p>The accounting result is now pending for End Day.</p>':''}`}))];
-  showScene({cls:a.presentation.sceneClass,presentation:a.presentation,pages,doneLabel:'Return to Garage HQ',onDone:render});
+  const pages=[...a.scriptScreens.map((screen,index)=>({speaker:screen.speaker,title:index===0?a.name:'',html:`<p>${activitySceneText(screen.text)}</p>`})),...event.screens.map((screen,index)=>({speaker:screen.speaker,title:index===0?event.title:'',html:`<p>${activitySceneText(screen.text)}</p>`}))];
+  showScene({cls:a.presentation.sceneClass,presentation:{...a.presentation,background},pages,doneLabel:'Return to Garage HQ',onDone:render});
   render();
 }
 
 /* ============================================================
-   Coffee
+   Take a break — rest or coffee
    ============================================================ */
 function useCoffee(){
   if(S.energy>=5){toast('Energy is already full.');return;}
-  if(S.cash<18){toast('Not enough cash for the $18 coffee.');return;}
-  if(S.time+0.5>24){toast('Too late for coffee.');return;}
-  const operations=operatingCashFor(0.5),total=operations-18;
-  openModal(`<div class="modal-head"><div><div class="micro">Coffee bar · 30 minutes</div><h2 id="modal-title">Restore 2 Energy?</h2><p>Thirty minutes passes, just like any other timed action.</p></div><button class="close" data-close>×</button></div><div class="modal-body"><table class="settle-table"><tr><td>Coffee</td><td>−${plainMoney(18)}</td></tr><tr><td>Company operations while away</td><td>${money(operations)}</td></tr><tr class="total"><td>Cash change</td><td>${money(total)}</td></tr></table><div class="plain-rule">Users keep paying for ClearRead while it serves them, and those same scans keep using AI. This is the same operating calculation used for builds, tests, events, and outside activities.</div><div class="modal-actions"><button class="btn" data-close>Cancel</button><button class="btn primary" id="buy-coffee">Buy coffee · cash ${plainMoney(S.cash)} → ${plainMoney(S.cash+total)}</button></div></div>`);
-  $('buy-coffee').onclick=()=>{const before=S.cash;S.cash-=18;S.coffeeSpend+=18;S.energy=Math.min(5,S.energy+2);advanceTime(0.5);closeModal();toast(`Coffee: cash ${plainMoney(before)}→${plainMoney(S.cash)} · +2 Energy · clock ${timeText()}`);render();};
+  const coffeeCost=scaleActivityMoney(18),canRest=S.time+2<=24,canCoffee=S.time+0.5<=24&&S.cash>=coffeeCost;
+  openModal(`<div class="modal-head"><div><div class="micro">Take a break</div><h2 id="modal-title">Have a rest, get some coffee!</h2><p>Choose between spending two hours or spending money. Either restores 2 Energy.</p></div><button class="close" data-close>×</button></div><div class="modal-body"><div class="break-grid"><button class="oracle-v2-choice" id="take-rest" ${canRest?'':'disabled'}><strong>Rest · free</strong><span>2 hours · +2 Energy</span></button><button class="oracle-v2-choice primary" id="buy-coffee" ${canCoffee?'':'disabled'}><strong>Get coffee · ${plainMoney(coffeeCost)}</strong><span>30 minutes · +2 Energy${activityInflation()!==1?` · price × ${activityInflation().toFixed(1)}`:''}</span></button></div>${!canCoffee&&S.cash<coffeeCost?`<div class="inline-notice">You need ${plainMoney(coffeeCost)} for coffee and have ${plainMoney(S.cash)}. Rest is still free.</div>`:''}<div class="modal-actions"><button class="btn" data-close>Cancel</button></div></div>`);
+  $('take-rest').onclick=()=>{if(!canRest)return;S.energy=Math.min(5,S.energy+2);advanceTime(2);closeModal();toast(`Rested · +2 Energy · clock ${timeText()}`);render();};
+  $('buy-coffee').onclick=()=>{if(!canCoffee)return;const before=S.cash;S.cash-=coffeeCost;S.coffeeSpend+=coffeeCost;S.energy=Math.min(5,S.energy+2);advanceTime(0.5);closeModal();toast(`Coffee: cash ${plainMoney(before)} → ${plainMoney(S.cash)} · +2 Energy`);render();};
 }
 
 /* ============================================================
@@ -1728,7 +1734,7 @@ function showDoor(){
     openModal(`<div class="modal-head"><div><div class="micro">${name} · ${open?`open until ${clockText(deadline)}`:'closed'}</div><h2 id="modal-title">${S.tested?'This build has known failures':'This build is untested'}</h2><p>${open?'You can still show unfinished work for feedback, but the customer only pays for a working result.':'This customer opportunity has closed. Release remains available until midnight, but only a fully passing build can ship.'}</p></div><button class="close" data-close>×</button></div>
     <div class="modal-body">
       ${S.tested?`<div class="plain-rule">${failCount} failing check${failCount===1?'':'s'} — the results screen says why each one failed.</div>`:'<div class="plain-rule">Run the tests first if you want the payment — the customer checks the result.</div>'}
-      <div class="modal-actions"><button class="btn" id="to-test">To the Test Bench</button>${open&&!S.demoAttended?`<button class="btn cyan" id="rough-demo">Show unfinished work · 1h · operating cash ${money(operatingCashFor(1))}</button>`:''}<button class="btn" data-close>Back</button></div>
+      <div class="modal-actions"><button class="btn" id="to-test">To the Test Bench</button>${open&&!S.demoAttended?`<button class="btn cyan" id="rough-demo">Show unfinished work · 1h</button>`:''}<button class="btn" data-close>Back</button></div>
     </div>`);
     $('modal').querySelectorAll('[data-close]').forEach(b=>b.onclick=closeModal);
     $('to-test').onclick=()=>{closeModal();autoWalk('test');};
@@ -1828,7 +1834,7 @@ function showRelease(){
         </div>
         <button class="btn primary" data-copy="hype">Launch to the wider market</button></div>
     </div>
-    <div class="plain-rule"><b>No market outcome posts yet.</b> Recording the launch takes 30 minutes and changes operating cash by ${money(operatingCashFor(0.5))}. New users, prior-day effects, event payment, preorder cash, and the deployed daily AI cost are reconciled together on the midnight receipt.</div>
+    <div class="plain-rule"><b>No market outcome posts yet.</b> Recording the launch takes 30 minutes. New users, event payments and deployed daily AI cost are reconciled on the midnight receipt.</div>
   </div>`);
   $('modal').querySelector('[data-close]').onclick=closeModal;
   $('modal').querySelectorAll('[data-copy]').forEach(b=>b.onclick=()=>{
@@ -1859,7 +1865,7 @@ function shipChoice(type){
     odds:Math.min(0.85,(t.hypeOdds||0.5)+(fr&&fr.lvl!=='closed'?0.15:0))};
   closeModal();
   $('world-message').textContent=`Release recorded at ${timeText()}: “${S.copy}”. Cash, users, prior effects, and the deployed daily AI cost post together at midnight.`;
-  toast(`${type==='honest'?'Evidence-matched':'Expansion'} launch recorded · operating cash ${plainMoney(cashBefore)}→${plainMoney(S.cash)} · market accounts pending`);
+  toast(`${type==='honest'?'Evidence-matched':'Expansion'} launch recorded`);
   render();
 }
 
@@ -1931,6 +1937,7 @@ function settleDay(){
   }
   postPendingAccounts();
   const activityPostings=postActivitySettlementEntries();
+  S.cash+=S.opRevenue-S.opAI;
   S.cash-=FIXED_BURN;S.fixedSpend=FIXED_BURN;S.settled=true;
   const change=S.cash-S.dayStartCash,broke=S.cash<=0;
   const rows=[
@@ -1962,7 +1969,6 @@ function renderSettlementReceipt(rows,change,broke,t){
     <div class="brief-grid">
       <div class="brief-card"><div class="k">Tomorrow’s users</div><strong>${S.users}</strong><p>${S.usersLost?`${S.usersLost} left over the skipped problem.`:S.issueResolved?'The chosen problem is fixed for them.':'No losses tonight.'}</p></div>
       <div class="brief-card"><div class="k">Tomorrow’s product result</div><strong>${fmtDay(dailyProductResult())}</strong><p>${fmtDay(dailyRevenue())} from users − ${plainMoney(S.aiDaily)}/day in AI.</p></div>
-      <div class="brief-card ${expTotal()||S.oracleV2.release?.scope==='wide'?'danger':'opportunity'}"><div class="k">Release record</div><strong>${S.oracleV2.release?`${S.oracleV2.release.scope==='evidence'?'Tested cases':'Wider market'} · pending`:expTotal()?`${plainMoney(expTotal())} open`:'Contained'}</strong><p>${S.oracleV2.release?`ClearRead ${S.oracleV2.release.version} was released to the ${S.oracleV2.release.scope==='evidence'?'cases demonstrated today':'wider market, including untested cases'}. The market response is deliberately not invented on this receipt.`:expTotal()?S.exposures.map(e=>`“${e.copy}” (${plainMoney(e.amount)})`).join(' · ')+` — ${S.day===7?`${oddsWords(S.exposures[0]?.odds||0.5)} an untested case enters support tomorrow; if it does, ${plainMoney(Math.round(expTotal()*REFUND_SHARE))} bills in the morning and the rest stays open.`:'one more market cycle resolves it at the wrap.'}`:S.copy?`“${S.copy}” stayed inside the tested segment.`:'No launch position taken.'}</p></div>
     </div>
     <div class="modal-actions">
       <button class="btn" id="record-after">Company record</button>
@@ -2022,7 +2028,7 @@ function showDay8Morning(){
       <div class="r-row"><span>Unit-price multiplier</span><strong>1.0× → ${DAY8_MULTIPLIER.toFixed(1)}×</strong></div>
       <div class="r-row"><span>Next ${CREDIT_PACK}-Credit pack</span><strong>${plainMoney(DAY7_PACK_PRICE)} → ${plainMoney(DAY8_PACK_PRICE)}</strong></div>
     </div>`,
-    aside:`The higher daily AI cost now appears in the HUD, every timed-action preview, the full calculation, and the midnight receipt.`});
+    aside:'The higher daily AI cost appears in the HUD and the midnight receipt.'});
   // page 2: yesterday's promise / neglect, if any
   if(S._morningRefund){
     const t=DAY7_TASKS[S.previousTaskId];

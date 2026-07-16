@@ -16,6 +16,19 @@
 <noscript>This approval preview requires JavaScript.</noscript>
 <script>
   const campaign=document.getElementById('campaign');
+  let gameFrame=null;
+  let gameModalOpen=false;
+  function updateExitControl(){
+    const button=campaign.contentDocument?.getElementById('demo-close');
+    const label=button?.querySelector('span:last-child');
+    if(label)label.textContent=gameModalOpen?'Close menu':'Exit game';
+    if(button)button.setAttribute('aria-label',gameModalOpen?'Close the open game menu':'Close the expanded game');
+  }
+  window.addEventListener('message',event=>{
+    if(event.data?.type!=='vcs-modal-state')return;
+    gameModalOpen=Boolean(event.data.open);
+    updateExitControl();
+  });
   campaign.addEventListener('load',()=>{
     const game=campaign.contentDocument&&campaign.contentDocument.querySelector('.demo-frame iframe');
     if(!game){
@@ -23,7 +36,17 @@
       campaign.classList.add('ready');
       return;
     }
+    gameFrame=game;
     game.src='v2/playable-prototype-v5.html';
+    const exit=campaign.contentDocument.getElementById('demo-close');
+    exit?.addEventListener('click',event=>{
+      if(!gameModalOpen)return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      gameFrame?.contentWindow?.VCSPrototype?.closeModal();
+      gameModalOpen=false;
+      updateExitControl();
+    },true);
     const note=campaign.contentDocument.querySelector('.demo-note p');
     if(note)note.textContent='Choose a station to open its action.';
     campaign.classList.add('ready');
