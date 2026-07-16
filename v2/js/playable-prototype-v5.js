@@ -53,79 +53,151 @@ const ACTIVITY_LESSONS = Object.freeze([
 ]);
 
 const ACTIVITIES = Object.create(null);
-function addActivity(definition){
-  if(!definition||typeof definition!=='object')throw new TypeError('Activity definition required.');
-  if(!/^[a-z0-9-]+$/.test(definition.id||''))throw new TypeError('Activity id must be a stable slug.');
+const ACTIVITY_SYSTEM_SPEAKERS = new Set(['NARRATOR','SYSTEM']);
+
+class ActivityAuthoringError extends TypeError{
+  constructor(issues){super(`Activity needs author input:\n${issues.map(issue=>`- ${issue.prompt}`).join('\n')}`);this.name='ActivityAuthoringError';this.issues=issues;}
+}
+
+function splitSentences(text){
+  return String(text||'').trim().match(/[^.!?]+[.!?]+(?:[”’"])?|[^.!?]+$/g)?.map(part=>part.trim()).filter(Boolean)||[];
+}
+
+function compileActivityScript(script,{maxWords=34}={}){
+  const source=Array.isArray(script)?script.join('\n'):String(script||'');
+  const beats=[];
+  source.split(/\n+/).map(line=>line.trim()).filter(Boolean).forEach((line,index)=>{
+    if(line==='---'){beats.push({break:true});return;}
+    const match=line.match(/^([\p{L}\p{N}_ .'-]{1,32}):\s*(.+)$/u);
+    const speaker=match?match[1].trim():'NARRATOR';
+    const text=match?match[2].trim():line;
+    let current='';
+    splitSentences(text).forEach(sentence=>{
+      const next=`${current} ${sentence}`.trim();
+      if(current&&next.split(/\s+/).length>maxWords){beats.push({speaker,text:current,sourceLine:index+1});current=sentence;}
+      else current=next;
+    });
+    if(current)beats.push({speaker,text:current,sourceLine:index+1});
+  });
+  const screens=[];
+  beats.forEach(beat=>{
+    if(beat.break){if(screens.length)screens[screens.length-1].explicitBreak=true;return;}
+    const previous=screens[screens.length-1];
+    const canMerge=previous&&!previous.explicitBreak&&previous.speaker===beat.speaker&&(previous.text+' '+beat.text).split(/\s+/).length<=maxWords;
+    if(canMerge)previous.text=`${previous.text} ${beat.text}`;
+    else screens.push({...beat});
+  });
+  return screens.map((screen,index)=>Object.freeze({...screen,id:`screen-${index+1}`}));
+}
+
+function activityAuthoringIssues(definition){
+  const issues=[];
+  const ask=(field,prompt)=>issues.push({field,prompt});
+  if(!definition||typeof definition!=='object'){ask('definition','Provide an activity definition.');return issues;}
+  if(!String(definition.id||'').trim())ask('id','Provide a stable activity id, such as “design-museum”.');
+  if(!String(definition.name||'').trim())ask('name','What is the player-facing activity name?');
+  if(!String(definition.location||'').trim())ask('location','What is the location name?');
+  if(!(definition.durationMinutes>0))ask('durationMinutes','How many minutes does the activity take?');
+  if(!String(definition.script||'').trim())ask('script','Provide the authored script. Use “SPEAKER: dialogue” on each line and “---” for an intentional screen break.');
+  if(!Array.isArray(definition.eventTable)||!definition.eventTable.length)ask('eventTable','Provide at least one response-table row with id, weight, script, and effects (use one weight-1 row for a deterministic activity).');
+  const presentation=definition.presentation||{};
+  if(!presentation.background&&!presentation.inheritWorldBackground)ask('presentation.background','Provide a background/image asset path, or explicitly set inheritWorldBackground: true.');
+  const scriptSpeakers=compileActivityScript(definition.script).map(screen=>screen.speaker).filter(speaker=>!ACTIVITY_SYSTEM_SPEAKERS.has(speaker.toUpperCase()));
+  const castNames=new Set((presentation.characters||[]).map(character=>String(character.name||character.id||'').toUpperCase()));
+  [...new Set(scriptSpeakers)].filter(speaker=>!castNames.has(speaker.toUpperCase())).forEach(speaker=>ask(`presentation.characters.${speaker}`,`Provide an approved character asset for ${speaker}, or rewrite that line as NARRATOR/SYSTEM if the character remains offscreen.`));
+  return issues;
+}
+
+function promptForActivityInputs(definition,issues){
+  if(typeof window==='undefined'||typeof window.prompt!=='function')throw new ActivityAuthoringError(issues);
+  const draft={...(definition||{}),presentation:{...definition?.presentation}};
+  for(const issue of issues){
+    const answer=window.prompt(issue.prompt,'');
+    if(answer===null)throw new ActivityAuthoringError(issues);
+    if(issue.field==='script')draft.script=answer;
+    else if(issue.field==='presentation.background')draft.presentation.background=answer;
+    else if(issue.field.startsWith('presentation.characters.')){
+      const name=issue.field.split('.').pop();
+      draft.presentation.characters=[...(draft.presentation.characters||[]),{id:name.toLowerCase().replace(/\W+/g,'-'),name,asset:answer,side:'left'}];
+    } else if(issue.field==='durationMinutes')draft.durationMinutes=Number(answer);
+    else if(issue.field==='eventTable')draft.eventTable=[{id:'default',weight:1,title:'Result',script:answer,effects:[]}];
+    else draft[issue.field]=answer;
+  }
+  return draft;
+}
+
+function addActivity(input,options={promptForMissing:true}){
+  let definition=input;
+  let issues=activityAuthoringIssues(definition);
+  if(issues.length&&options.promptForMissing){definition=promptForActivityInputs(definition,issues);issues=activityAuthoringIssues(definition);}
+  if(issues.length)throw new ActivityAuthoringError(issues);
+  if(!/^[a-z0-9-]+$/.test(definition.id))throw new TypeError('Activity id must be a stable slug.');
   if(ACTIVITIES[definition.id])throw new TypeError(`Duplicate activity id: ${definition.id}`);
-  if(!String(definition.name||'').trim()||!String(definition.location||'').trim())throw new TypeError('Activity name and location are required.');
-  if(!(definition.durationMinutes>0))throw new TypeError(`Invalid duration for ${definition.id}.`);
   const cost=definition.cost||{};
   if((cost.cash||0)<0||(cost.energy||0)<0)throw new TypeError(`Activity costs cannot be negative: ${definition.id}.`);
-  if(!Array.isArray(definition.scenes)||!definition.scenes.length||definition.scenes.some(scene=>!String(scene.text||'').trim()))throw new TypeError(`Activity ${definition.id} needs scene text.`);
-  const normalized={
+  const allowedEffects=new Set(['energy','cash','users','lesson','test-unlock']);
+  const normalizeEffect=effect=>{
+    if(!allowedEffects.has(effect.type))throw new TypeError(`Unknown activity effect ${effect.type} in ${definition.id}.`);
+    if(!['immediate','settlement'].includes(effect.timing))throw new TypeError(`Invalid activity effect timing in ${definition.id}.`);
+    return Object.freeze({...effect});
+  };
+  const eventTable=definition.eventTable.map(row=>{
+    if(!/^[a-z0-9-]+$/.test(row.id||'')||!(Number(row.weight)>0)||!String(row.script||'').trim())throw new TypeError(`Activity ${definition.id} has an invalid response-table row.`);
+    return Object.freeze({...row,weight:Number(row.weight),screens:Object.freeze(compileActivityScript(row.script)),effects:Object.freeze((row.effects||[]).map(normalizeEffect))});
+  });
+  const presentation={inheritWorldBackground:false,sceneClass:'',background:'',characters:[],...definition.presentation};
+  const normalized=Object.freeze({
     ...definition,
     cost:Object.freeze({cash:Number(cost.cash||0),energy:Number(cost.energy||0)}),
     preview:Object.freeze({...definition.preview}),
-    scenes:Object.freeze(definition.scenes.map(scene=>Object.freeze({...scene}))),
-    effects:Object.freeze((definition.effects||[]).map(effect=>Object.freeze({...effect}))),
-    outcomes:Object.freeze((definition.outcomes||[]).map(outcome=>Object.freeze({...outcome,effects:Object.freeze((outcome.effects||[]).map(effect=>Object.freeze({...effect})))})))
-  };
-  const allowedEffects=new Set(['energy','cash','users','lesson','test-unlock']);
-  [...normalized.effects,...normalized.outcomes.flatMap(outcome=>outcome.effects)].forEach(effect=>{
-    if(!allowedEffects.has(effect.type))throw new TypeError(`Unknown activity effect ${effect.type} in ${definition.id}.`);
-    if(!['immediate','settlement'].includes(effect.timing))throw new TypeError(`Invalid activity effect timing in ${definition.id}.`);
+    scriptScreens:Object.freeze(compileActivityScript(definition.script)),
+    presentation:Object.freeze({...presentation,characters:Object.freeze((presentation.characters||[]).map(character=>Object.freeze({...character})))}),
+    eventTable:Object.freeze(eventTable)
   });
-  ACTIVITIES[definition.id]=Object.freeze(normalized);
-  return ACTIVITIES[definition.id];
+  ACTIVITIES[definition.id]=normalized;
+  return normalized;
 }
 
-addActivity({
+const registerActivity=definition=>addActivity(definition,{promptForMissing:false});
+
+registerActivity({
   id:'workout',name:'Work out',location:'Neighborhood gym',durationMinutes:60,
-  cost:{cash:20,energy:0},preview:{description:'Step away from the laptop and reset.'},
-  scenes:[
-    {title:'Mind over body is a lie.',text:'You go and get swole in the gym because “mind over body” is a lie.'},
-    {title:'Energy +2!',text:'You leave the gym awake, sore, and ready to make another decision.'}
-  ],
-  effects:[{id:'energy-gain',timing:'immediate',type:'energy',amount:2,label:'Workout recovery'}]
+  cost:{cash:20,energy:0},preview:{description:'Step away from the laptop and reset.'},presentation:{inheritWorldBackground:true,sceneClass:'activity-workout'},
+  script:'NARRATOR: You go and get swole in the gym because “mind over body” is a lie.',
+  eventTable:[{id:'recovery',weight:1,title:'Energy +2!',script:'SYSTEM: Energy +2!',effects:[{id:'energy-gain',timing:'immediate',type:'energy',amount:2,label:'Workout recovery'}]}]
 });
 
-addActivity({
+registerActivity({
   id:'meetup',name:'Community demo night',location:'Founder Commons',durationMinutes:90,
-  cost:{cash:0,energy:2},preview:{description:'Show ClearRead to a small room of founders.'},
-  scenes:[{title:'A small and cozy room',text:'You talk about your app to a small and cozy room of founders.'}],
-  outcomes:[
-    {id:'quiet-room',title:'A very honest room',text:'Half their eyes glaze over. One person shouts, “ANOTHER VIBE-CODED APP?!” Nobody donates tonight.',effects:[{id:'donation',timing:'settlement',type:'cash',amount:0,monetary:true,label:'Community demo donation'}]},
-    {id:'twenty',title:'One person gets it',text:'Half their eyes glaze over. One person shouts, “ANOTHER VIBE-CODED APP?!” One founder stays behind and donates $20.',effects:[{id:'donation',timing:'settlement',type:'cash',amount:20,monetary:true,label:'Community demo donation'}]},
-    {id:'forty',title:'One of them was legit',text:'Half their eyes glaze over. One person shouts, “ANOTHER VIBE-CODED APP?!” But one of them was legit—and donated $40.',effects:[{id:'donation',timing:'settlement',type:'cash',amount:40,monetary:true,label:'Community demo donation'}]},
-    {id:'sixty',title:'The room surprises you',text:'Half their eyes glaze over. One person shouts, “ANOTHER VIBE-CODED APP?!” Two founders pool together and donate $60.',effects:[{id:'donation',timing:'settlement',type:'cash',amount:60,monetary:true,label:'Community demo donation'}]}
+  cost:{cash:0,energy:2},preview:{description:'Show ClearRead to a small room of founders.'},presentation:{inheritWorldBackground:true,sceneClass:'stage'},
+  script:'NARRATOR: You talk about your app to a small and cozy room of founders.',
+  eventTable:[
+    {id:'quiet-room',weight:1,title:'A very honest room',script:'NARRATOR: Half their eyes glaze over. One person shouts, “ANOTHER VIBE-CODED APP?!” Nobody donates tonight.',effects:[{id:'donation',timing:'settlement',type:'cash',amount:0,monetary:true,label:'Community demo donation'}]},
+    {id:'twenty',weight:1,title:'One person gets it',script:'NARRATOR: Half their eyes glaze over. One person shouts, “ANOTHER VIBE-CODED APP?!” One founder stays behind and donates $20.',effects:[{id:'donation',timing:'settlement',type:'cash',amount:20,monetary:true,label:'Community demo donation'}]},
+    {id:'forty',weight:1,title:'One of them was legit',script:'NARRATOR: Half their eyes glaze over. One person shouts, “ANOTHER VIBE-CODED APP?!” But one of them was legit and donated $40!',effects:[{id:'donation',timing:'settlement',type:'cash',amount:40,monetary:true,label:'Community demo donation'}]},
+    {id:'sixty',weight:1,title:'The room surprises you',script:'NARRATOR: Half their eyes glaze over. One person shouts, “ANOTHER VIBE-CODED APP?!” Two founders pool together and donate $60.',effects:[{id:'donation',timing:'settlement',type:'cash',amount:60,monetary:true,label:'Community demo donation'}]}
   ]
 });
 
-addActivity({
+registerActivity({
   id:'class',name:'Product systems class',location:'Community classroom',durationMinutes:120,
-  cost:{cash:100,energy:3},preview:{description:'Trade an evening for one practical product lesson.'},
-  scenes:[{title:'Product systems class',text:'You went to a product systems class!'}],
-  outcomes:ACTIVITY_LESSONS.map(lesson=>({id:lesson.id,title:'You learned something useful',text:lesson.text,effects:[{id:`lesson-${lesson.id}`,timing:'immediate',type:'lesson',value:lesson.text,label:'Product systems lesson'}]}))
+  cost:{cash:100,energy:3},preview:{description:'Trade an evening for one practical product lesson.'},presentation:{inheritWorldBackground:true,sceneClass:'activity-class'},
+  script:'NARRATOR: You went for a product systems class!',
+  eventTable:ACTIVITY_LESSONS.map(lesson=>({id:lesson.id,weight:1,title:'You learned something useful',script:`SYSTEM: ${lesson.text}`,effects:[{id:`lesson-${lesson.id}`,timing:'immediate',type:'lesson',value:lesson.text,label:'Product systems lesson'}]}))
 });
 
-addActivity({
+registerActivity({
   id:'photo',name:'Photography walk',location:'Market streets',durationMinutes:90,
-  cost:{cash:50,energy:1},preview:{description:'Take a hike with friends and look at the world differently.'},
-  scenes:[
-    {title:'Out on the trail',text:'You went on a hike with some friends.'},
-    {title:'Inspiration received!',text:'You took some selfies and pictures too. A new test idea is waiting back at the garage.'}
-  ],
-  effects:[{id:'changing-light-test',timing:'immediate',type:'test-unlock',value:'changing-light-photo',label:'Changing-light photo test unlocked'}]
+  cost:{cash:50,energy:1},preview:{description:'Take a hike with friends and look at the world differently.'},presentation:{inheritWorldBackground:true,sceneClass:'activity-photo'},
+  script:'NARRATOR: Went on a hike with some friends.\nNARRATOR: Took some selfies and pictures too!',
+  eventTable:[{id:'inspiration',weight:1,title:'Inspiration received!',script:'SYSTEM: Inspiration received!',effects:[{id:'changing-light-test',timing:'immediate',type:'test-unlock',value:'changing-light-photo',label:'New photo test unlocked'}]}]
 });
 
-addActivity({
+registerActivity({
   id:'grandma',name:'Call Grandma',location:'Phone call',durationMinutes:60,
-  cost:{cash:0,energy:1},preview:{description:'Make time for a family call.'},
-  scenes:[
-    {title:'A good call',text:'You call Grandma for a fun chat filled with laughter.'},
-    {title:'Grandma has been talking',text:'Apparently she told her senior-citizen WhatsApp group about you! The response arrives with tonight’s settlement.'}
-  ],
-  effects:[{id:'word-of-mouth',timing:'settlement',type:'users',amount:4,label:'Grandma’s WhatsApp referrals'}]
+  cost:{cash:0,energy:1},preview:{description:'Make time for a family call.'},presentation:{inheritWorldBackground:true,sceneClass:'activity-grandma',characters:[{id:'grandma',name:'Grandma',asset:ASSET.grandma,side:'left',alt:'Grandma on a video call'}]},
+  script:'NARRATOR: You call Grandma for a fun chat filled with laughter.',
+  eventTable:[{id:'whatsapp-referrals',weight:1,title:'Grandma has been talking',script:'NARRATOR: Apparently she told her senior citizen WhatsApp group about you!',effects:[{id:'word-of-mouth',timing:'settlement',type:'users',amount:4,label:'Grandma’s WhatsApp referrals'}]}]
 });
 
 /* ---------- seeded RNG (real randomness, reproducible per build) ---------- */
@@ -543,28 +615,35 @@ function activityHash(value){
   return hash>>>0;
 }
 
-function chooseActivityOutcome(activity){
-  if(!activity.outcomes.length)return null;
+function chooseActivityEvent(activity){
+  if(!activity.eventTable.length)return null;
   const rng=mulberry32((S.activitySeed^activityHash(`${S.day}:${activity.id}`))>>>0);
-  return activity.outcomes[Math.floor(rng()*activity.outcomes.length)];
+  const total=activity.eventTable.reduce((sum,row)=>sum+row.weight,0);
+  let cursor=rng()*total;
+  return activity.eventTable.find(row=>((cursor-=row.weight)<=0))||activity.eventTable[activity.eventTable.length-1];
 }
 
-function recordActivityEntry(activity,effectId,resource,amount,timing,label,detail=''){
+function recordActivityEntry(activity,effectId,resource,amount,timing,label,detail='',metadata={}){
   const id=`day-${S.day}:activity:${activity.id}:${effectId}`;
   if(activityLedgerEntries().some(entry=>entry.id===id))return null;
   const entry=Object.freeze({
     id,day:S.day,source:Object.freeze({type:'activity',id:activity.id,name:activity.name}),
-    resource,amount,timing,label,detail,inflationMultiplier:activityInflation()
+    resource,amount,timing,label,detail,inflationMultiplier:activityInflation(),
+    eventId:metadata.eventId||'',eventTitle:metadata.eventTitle||'',script:Object.freeze([...(metadata.script||[])]),
+    status:timing==='settlement'?'pending':'posted'
   });
   S.activityLedger.push(entry);
   if(timing==='immediate')S.postedActivityEntries[id]=true;
   return entry;
 }
 
-function applyActivityEffect(activity,effect,outcomeId,index){
-  const suffix=outcomeId?`${outcomeId}:${effect.id||index}`:(effect.id||index);
+function applyActivityEffect(activity,effect,event,index){
+  const eventId=event?.id||'';
+  const suffix=eventId?`${eventId}:${effect.id||index}`:(effect.id||index);
   const amount=effect.monetary?scaleActivityMoney(effect.amount):Number(effect.amount||0);
-  const entry=recordActivityEntry(activity,suffix,effect.type,amount,effect.timing,effect.label||activity.name,effect.value||'');
+  const entry=recordActivityEntry(activity,suffix,effect.type,amount,effect.timing,effect.label||activity.name,effect.value||'',{
+    eventId,eventTitle:event?.title||'',script:event?.screens?.map(screen=>`${screen.speaker}: ${screen.text}`)||[]
+  });
   if(!entry||effect.timing!=='immediate')return;
   if(effect.type==='energy')S.energy=Math.max(0,Math.min(5,S.energy+amount));
   if(effect.type==='cash')S.cash+=amount;
@@ -599,10 +678,24 @@ function activityImpact(activity){
   const result=activityResult(activity.id),entries=currentActivityEntries().filter(entry=>entry.source.id===activity.id);
   const energy=entries.filter(entry=>entry.resource==='energy').reduce((sum,entry)=>sum+entry.amount,0);
   const notes=[];
-  if(result?.outcomeText)notes.push(result.outcomeText);
+  if(result?.eventText)notes.push(result.eventText);
   entries.filter(entry=>entry.resource==='lesson'||entry.resource==='test-unlock').forEach(entry=>notes.push(entry.detail||entry.label));
   if(energy)notes.push(`Energy ${energy>0?'+':''}${energy}.`);
   return `<div class="impact"><b>Outside activity · ${activity.name}</b>${notes.join(' ')||'Completed and recorded.'}</div>`;
+}
+
+function activityEffectLabel(effect){
+  const amount=effect.monetary?`${effect.amount>=0?'+':'−'}$${Math.abs(effect.amount)}`:effect.amount!==undefined?`${effect.amount>=0?'+':''}${effect.amount} ${effect.type}`:effect.value||effect.type;
+  return `${amount} · ${effect.timing}`;
+}
+
+function activityDefinitionTable(){
+  return `<div class="activity-ledger-block"><h3>Response tables</h3><p class="table-note">One row is selected once per activity and day. Weight controls relative likelihood; monetary effects use the inflation snapshot captured when the activity starts.</p><div class="table-scroll"><table class="activity-ledger-table"><thead><tr><th>Activity</th><th>Response row</th><th>Weight</th><th>Ledger effects</th></tr></thead><tbody>${Object.values(ACTIVITIES).flatMap(activity=>activity.eventTable.map(row=>`<tr><td>${activity.name}</td><td><b>${row.title}</b><small>${row.screens.map(screen=>screen.text).join(' ')}</small></td><td>${row.weight}</td><td>${row.effects.length?row.effects.map(activityEffectLabel).join('<br>'):'Narrative only'}</td></tr>`)).join('')}</tbody></table></div></div>`;
+}
+
+function activityRunLedgerTable(){
+  const entries=currentActivityEntries();
+  return `<div class="activity-ledger-block"><h3>Today’s activity journal</h3><p class="table-note">Immediate entries have posted. Settlement entries remain pending until End Day and are idempotent.</p><div class="table-scroll"><table class="activity-ledger-table"><thead><tr><th>Source</th><th>Selected event / entry</th><th>Resource</th><th>Amount</th><th>Status</th></tr></thead><tbody>${entries.length?entries.map(entry=>`<tr><td>${entry.source.name}</td><td><b>${entry.eventTitle||entry.label}</b><small>${entry.script.join(' ')||entry.detail||entry.label}</small></td><td>${entry.resource}</td><td>${entry.resource==='cash'?money(entry.amount):entry.amount||'—'}</td><td><span class="ledger-status ${S.postedActivityEntries[entry.id]?'posted':'pending'}">${S.postedActivityEntries[entry.id]?'Posted':'Pending'}</span></td></tr>`).join(''):'<tr><td colspan="5">No outside activity has been recorded today.</td></tr>'}</tbody></table></div></div>`;
 }
 
 function advanceTime(hours){
@@ -618,14 +711,18 @@ function toast(message){$('toast').textContent=message;$('toast').classList.add(
    Scene system (visual-novel beats)
    ============================================================ */
 function showScene(spec){
-  // spec: {cls, art, artAlt, pages:[{speaker,title,html,aside}], doneLabel, onDone}
+  // presentation layers render in this order: background, cast, dialogue.
   let page = 0;
   const renderPage = () => {
     const p = spec.pages[page];
     const last = page === spec.pages.length - 1;
-    openModal(`<div class="scene ${spec.cls||''}">
+    const presentation=spec.presentation||{};
+    const background=presentation.background?` style="--activity-background:url('${presentation.background}')"`:'';
+    const cast=(presentation.characters||[]).map(character=>`<img class="scene-character activity-character ${character.side==='right'?'right':''}" src="${character.asset}" alt="${character.alt||character.name||''}">`).join('');
+    openModal(`<div class="scene ${spec.cls||''} ${presentation.background?'activity-background':''}"${background}>
       ${spec.art?`<img class="scene-character" src="${spec.art}" alt="${spec.artAlt||''}">`:''}
-      <div class="scene-box ${spec.art?'':'wide'}">
+      ${cast}
+      <div class="scene-box ${spec.art||cast?'':'wide'}">
         <div class="speaker">${p.speaker||''}</div>
         ${p.title?`<h2 id="modal-title">${p.title}</h2>`:''}
         ${p.html}
@@ -1517,7 +1614,8 @@ function activitySceneText(text){
 
 function activityCostBadges(activity){
   const cash=activityCashCost(activity),energy=activity.cost.energy;
-  const gain=activity.effects.filter(effect=>effect.type==='energy'&&effect.amount>0).reduce((sum,effect)=>sum+effect.amount,0);
+  const gains=[...new Set(activity.eventTable.map(row=>row.effects.filter(effect=>effect.type==='energy'&&effect.amount>0).reduce((sum,effect)=>sum+effect.amount,0)))];
+  const gain=gains.length===1?gains[0]:0;
   return `<span class="activity-cost ${cash?'cash-cost':'cash-free'}">${cash?`−${plainMoney(cash)}`:'Free'}</span>${energy?`<span class="activity-cost energy-cost">⚡ −${energy} Energy</span>`:''}${gain?`<span class="activity-cost energy-gain">⚡ +${gain} Energy</span>`:''}`;
 }
 
@@ -1544,15 +1642,15 @@ function chooseActivity(id){
   recordActivityEntry(a,'direct-cost','cash',-cashCost,'immediate',`${a.name} direct cost`);
   if(a.cost.energy){S.energy-=a.cost.energy;recordActivityEntry(a,'energy-cost','energy',-a.cost.energy,'immediate',`${a.name} Energy`);}
   advanceTime(hours);S.activityIds.push(id);
-  const outcome=chooseActivityOutcome(a);
-  [...a.effects,...(outcome?.effects||[])].forEach((effect,index)=>applyActivityEffect(a,effect,outcome?.id||'',index));
-  S.activityResults[id]=Object.freeze({activityId:id,outcomeId:outcome?.id||'',outcomeTitle:outcome?.title||'',outcomeText:outcome?activitySceneText(outcome.text):'',inflationMultiplier:activityInflation()});
+  const event=chooseActivityEvent(a);
+  recordActivityEntry(a,`event:${event.id}`,'event',0,'immediate',event.title,event.screens.map(screen=>screen.text).join(' '),{eventId:event.id,eventTitle:event.title,script:event.screens.map(screen=>`${screen.speaker}: ${screen.text}`)});
+  event.effects.forEach((effect,index)=>applyActivityEffect(a,effect,event,index));
+  S.activityResults[id]=Object.freeze({activityId:id,eventId:event.id,eventTitle:event.title,eventText:activitySceneText(event.screens.map(screen=>screen.text).join(' ')),inflationMultiplier:activityInflation()});
   closeModal();
   $('world-message').textContent=`Outside activity complete: ${a.name}. The result is recorded for End Day.`;
   toast(`${a.name} · cash ${plainMoney(before.cash)} → ${plainMoney(S.cash)} · Energy ${before.energy} → ${S.energy}`);
-  const pages=a.scenes.map(scene=>({speaker:`${a.location.toUpperCase()} · ${a.durationMinutes} MINUTES`,title:scene.title,html:`<p>${activitySceneText(scene.text)}</p>`}));
-  if(outcome)pages.push({speaker:`${a.name.toUpperCase()} · OUTCOME`,title:outcome.title,html:`<p>${activitySceneText(outcome.text)}</p><p>The result is saved for End Day settlement.</p>`});
-  showScene({cls:a.id==='meetup'?'stage':'',pages,doneLabel:'Return to Garage HQ',onDone:render});
+  const pages=[...a.scriptScreens.map((screen,index)=>({speaker:screen.speaker,title:index===0?a.name:'',html:`<p>${activitySceneText(screen.text)}</p>`})),...event.screens.map((screen,index)=>({speaker:screen.speaker,title:index===0?event.title:'',html:`<p>${activitySceneText(screen.text)}</p>${event.effects.some(effect=>effect.timing==='settlement')?'<p>The accounting result is now pending for End Day.</p>':''}`}))];
+  showScene({cls:a.presentation.sceneClass,presentation:a.presentation,pages,doneLabel:'Return to Garage HQ',onDone:render});
   render();
 }
 
@@ -1976,7 +2074,7 @@ function showRunwayZero(){
    ============================================================ */
 function showRecord(tab){
   if(tab)S.recordTab=tab;
-  const tabs=[['products','Product'],['builds','Builds'],['promises','Promises'],['people','People']];
+  const tabs=[['products','Product'],['builds','Builds'],['promises','Promises'],['activities','Activities'],['people','People']];
   let rows=[];const t=task();
   if(S.recordTab==='products')rows=[
     ['Active product',`ClearRead · ${S.users} users generate ${fmtDay(dailyRevenue())} · daily AI cost ${plainMoney(S.aiDaily)} · product result ${fmtDay(dailyProductResult())}.`],
@@ -2011,12 +2109,13 @@ function showRecord(tab){
   ];
   if(S.recordTab==='people')rows=[
     ['Founder (you)','Chooses the problem, writes the instruction, decides the promise.'],
-    ['Life outside the garage',activities().length?activities().map(a=>{const result=activityResult(a.id);return `${a.name} at ${a.location}${result?.outcomeTitle?`: ${result.outcomeTitle}`:''}`;}).join(' · '):'No outside activities yet today. The map remains available while time and cash allow.'],
+    ['Life outside the garage',activities().length?activities().map(a=>{const result=activityResult(a.id);return `${a.name} at ${a.location}${result?.eventTitle?`: ${result.eventTitle}`:''}`;}).join(' · '):'No outside activities yet today. The map remains available while time and cash allow.'],
     ['USER_0047','The person the company exists for. His grandma hit the glare failure the night before Day 7.']
   ];
-  openModal(`<div class="modal-head"><div><div class="micro">Company record</div><h2 id="modal-title">Product, builds, promises, people</h2></div><button class="close" data-close>×</button></div>
+  const activityTables=S.recordTab==='activities'?activityDefinitionTable()+activityRunLedgerTable():'';
+  openModal(`<div class="modal-head"><div><div class="micro">Company record</div><h2 id="modal-title">Product, builds, promises, activities, people</h2></div><button class="close" data-close>×</button></div>
   <div class="modal-body"><div class="record-tabs">${tabs.map(x=>`<button class="record-tab ${S.recordTab===x[0]?'active':''}" data-record-tab="${x[0]}">${x[1]}</button>`).join('')}</div>
-  ${rows.map(r=>`<div class="record-row"><b>${r[0]}</b><span>${r[1]}</span></div>`).join('')}
+  ${activityTables||rows.map(r=>`<div class="record-row"><b>${r[0]}</b><span>${r[1]}</span></div>`).join('')}
   <div class="modal-actions"><button class="btn primary" data-close>Back</button></div></div>`);
   $('modal').querySelectorAll('[data-close]').forEach(b=>b.onclick=S.settled?showSettlementReceipt:closeModal);
   $('modal').querySelectorAll('[data-record-tab]').forEach(b=>b.onclick=()=>showRecord(b.dataset.recordTab));
@@ -2053,4 +2152,10 @@ function init(){
   startPlayerAnimation('idle',true);applyFacing();render();startMorning();
 }
 window.__vcsPrototype={getState:()=>JSON.parse(JSON.stringify(S)),reset:resetAll};
+window.__vcsActivities={
+  addActivity,
+  compileScript:compileActivityScript,
+  authoringIssues:activityAuthoringIssues,
+  definitions:()=>JSON.parse(JSON.stringify(Object.values(ACTIVITIES)))
+};
 init();
