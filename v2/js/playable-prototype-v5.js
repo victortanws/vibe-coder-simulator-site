@@ -99,7 +99,7 @@ function activityAuthoringIssues(definition){
   if(!String(definition.location||'').trim())ask('location','What is the location name?');
   if(!(definition.durationMinutes>0))ask('durationMinutes','How many minutes does the activity take?');
   if(!String(definition.script||'').trim())ask('script','Provide the authored script. Use “SPEAKER: dialogue” on each line and “---” for an intentional screen break.');
-  if(!Array.isArray(definition.eventTable)||!definition.eventTable.length)ask('eventTable','Provide at least one response-table row with id, weight, script, and effects (use one weight-1 row for a deterministic activity).');
+  if(!Array.isArray(definition.eventTable)||!definition.eventTable.length)ask('eventTable','Paste a JSON array with at least one response row: [{"id":"result","weight":1,"title":"Result","script":"SYSTEM: What happened.","effects":[]}].');
   const presentation=definition.presentation||{};
   if(!presentation.background&&!presentation.inheritWorldBackground)ask('presentation.background','Provide a background/image asset path, or explicitly set inheritWorldBackground: true.');
   const scriptSpeakers=compileActivityScript(definition.script).map(screen=>screen.speaker).filter(speaker=>!ACTIVITY_SYSTEM_SPEAKERS.has(speaker.toUpperCase()));
@@ -120,7 +120,9 @@ function promptForActivityInputs(definition,issues){
       const name=issue.field.split('.').pop();
       draft.presentation.characters=[...(draft.presentation.characters||[]),{id:name.toLowerCase().replace(/\W+/g,'-'),name,asset:answer,side:'left'}];
     } else if(issue.field==='durationMinutes')draft.durationMinutes=Number(answer);
-    else if(issue.field==='eventTable')draft.eventTable=[{id:'default',weight:1,title:'Result',script:answer,effects:[]}];
+    else if(issue.field==='eventTable'){
+      try{draft.eventTable=JSON.parse(answer);}catch{throw new ActivityAuthoringError([{field:'eventTable',prompt:'The response table was not valid JSON. Paste an array of rows with id, weight, title, script and effects.'}]);}
+    }
     else draft[issue.field]=answer;
   }
   return draft;
