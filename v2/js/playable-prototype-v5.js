@@ -40,13 +40,93 @@ const isNewProduct = t => /^New app\b/i.test(t.type);
 const productScope = t => `${isNewProduct(t)?'New product':'Existing product'} · ${t.app}`;
 const taskButtonLabel = t => isNewProduct(t)?`Prototype ${t.app}`:`Work on this ${t.app} problem`;
 
-const ACTIVITIES = {
-  workout:{id:'workout',name:'Work out',place:'Neighborhood gym',hours:1,cash:8,effect:'Restore 2 Focus immediately.',focus:2},
-  meetup:{id:'meetup',name:'Community demo night',place:'Founder Commons',hours:1.5,cash:20,effect:'A new contact adds $40 to a successful customer presentation.',eventBonus:40},
-  class:{id:'class',name:'Product systems class',place:'Community classroom',hours:2,cash:40,effect:'A test-first checklist prevents the Standard build’s implementation bug on Day 8.'},
-  photo:{id:'photo',name:'Photography walk',place:'Market streets',hours:1.5,cash:15,effect:'Adds a changing-light edge case to the next test run.',photoTest:true},
-  grandma:{id:'grandma',name:'Call Grandma',place:'Phone call',hours:1,cash:0,effect:'Her read-back insight adds 4 users to an evidence-matched ClearRead launch.',launchUsers:4}
-};
+const ACTIVITY_LESSONS = Object.freeze([
+  {id:'technical-debt',text:'Technical debt is future work created when today’s shortcut becomes tomorrow’s constraint.'},
+  {id:'test-boundary',text:'A test proves the case it actually ran—not every nearby case.'},
+  {id:'observable-requirement',text:'“What should the user observe?” is stronger than “make it smart.”'},
+  {id:'reproduce-first',text:'Reproducing a bug turns a mystery into a task.'},
+  {id:'persistent-state',text:'Product state should survive closing and reopening the interface.'},
+  {id:'cache-lifetime',text:'Cached data needs an explicit owner and lifetime.'},
+  {id:'usage-economics',text:'Usage-based costs scale with users, not merely with builds.'},
+  {id:'release-versus-result',text:'A release records a decision; the market result happens later.'},
+  {id:'fallback',text:'A good fallback states what the software cannot do instead of inventing an answer.'}
+]);
+
+const ACTIVITIES = Object.create(null);
+function addActivity(definition){
+  if(!definition||typeof definition!=='object')throw new TypeError('Activity definition required.');
+  if(!/^[a-z0-9-]+$/.test(definition.id||''))throw new TypeError('Activity id must be a stable slug.');
+  if(ACTIVITIES[definition.id])throw new TypeError(`Duplicate activity id: ${definition.id}`);
+  if(!String(definition.name||'').trim()||!String(definition.location||'').trim())throw new TypeError('Activity name and location are required.');
+  if(!(definition.durationMinutes>0))throw new TypeError(`Invalid duration for ${definition.id}.`);
+  const cost=definition.cost||{};
+  if((cost.cash||0)<0||(cost.energy||0)<0)throw new TypeError(`Activity costs cannot be negative: ${definition.id}.`);
+  if(!Array.isArray(definition.scenes)||!definition.scenes.length||definition.scenes.some(scene=>!String(scene.text||'').trim()))throw new TypeError(`Activity ${definition.id} needs scene text.`);
+  const normalized={
+    ...definition,
+    cost:Object.freeze({cash:Number(cost.cash||0),energy:Number(cost.energy||0)}),
+    preview:Object.freeze({...definition.preview}),
+    scenes:Object.freeze(definition.scenes.map(scene=>Object.freeze({...scene}))),
+    effects:Object.freeze((definition.effects||[]).map(effect=>Object.freeze({...effect}))),
+    outcomes:Object.freeze((definition.outcomes||[]).map(outcome=>Object.freeze({...outcome,effects:Object.freeze((outcome.effects||[]).map(effect=>Object.freeze({...effect})))})))
+  };
+  const allowedEffects=new Set(['energy','cash','users','lesson','test-unlock']);
+  [...normalized.effects,...normalized.outcomes.flatMap(outcome=>outcome.effects)].forEach(effect=>{
+    if(!allowedEffects.has(effect.type))throw new TypeError(`Unknown activity effect ${effect.type} in ${definition.id}.`);
+    if(!['immediate','settlement'].includes(effect.timing))throw new TypeError(`Invalid activity effect timing in ${definition.id}.`);
+  });
+  ACTIVITIES[definition.id]=Object.freeze(normalized);
+  return ACTIVITIES[definition.id];
+}
+
+addActivity({
+  id:'workout',name:'Work out',location:'Neighborhood gym',durationMinutes:60,
+  cost:{cash:20,energy:0},preview:{description:'Step away from the laptop and reset.'},
+  scenes:[
+    {title:'Mind over body is a lie.',text:'You go and get swole in the gym because “mind over body” is a lie.'},
+    {title:'Energy +2!',text:'You leave the gym awake, sore, and ready to make another decision.'}
+  ],
+  effects:[{id:'energy-gain',timing:'immediate',type:'energy',amount:2,label:'Workout recovery'}]
+});
+
+addActivity({
+  id:'meetup',name:'Community demo night',location:'Founder Commons',durationMinutes:90,
+  cost:{cash:0,energy:2},preview:{description:'Show ClearRead to a small room of founders.'},
+  scenes:[{title:'A small and cozy room',text:'You talk about your app to a small and cozy room of founders.'}],
+  outcomes:[
+    {id:'quiet-room',title:'A very honest room',text:'Half their eyes glaze over. One person shouts, “ANOTHER VIBE-CODED APP?!” Nobody donates tonight.',effects:[{id:'donation',timing:'settlement',type:'cash',amount:0,monetary:true,label:'Community demo donation'}]},
+    {id:'twenty',title:'One person gets it',text:'Half their eyes glaze over. One person shouts, “ANOTHER VIBE-CODED APP?!” One founder stays behind and donates $20.',effects:[{id:'donation',timing:'settlement',type:'cash',amount:20,monetary:true,label:'Community demo donation'}]},
+    {id:'forty',title:'One of them was legit',text:'Half their eyes glaze over. One person shouts, “ANOTHER VIBE-CODED APP?!” But one of them was legit—and donated $40.',effects:[{id:'donation',timing:'settlement',type:'cash',amount:40,monetary:true,label:'Community demo donation'}]},
+    {id:'sixty',title:'The room surprises you',text:'Half their eyes glaze over. One person shouts, “ANOTHER VIBE-CODED APP?!” Two founders pool together and donate $60.',effects:[{id:'donation',timing:'settlement',type:'cash',amount:60,monetary:true,label:'Community demo donation'}]}
+  ]
+});
+
+addActivity({
+  id:'class',name:'Product systems class',location:'Community classroom',durationMinutes:120,
+  cost:{cash:100,energy:3},preview:{description:'Trade an evening for one practical product lesson.'},
+  scenes:[{title:'Product systems class',text:'You went to a product systems class!'}],
+  outcomes:ACTIVITY_LESSONS.map(lesson=>({id:lesson.id,title:'You learned something useful',text:lesson.text,effects:[{id:`lesson-${lesson.id}`,timing:'immediate',type:'lesson',value:lesson.text,label:'Product systems lesson'}]}))
+});
+
+addActivity({
+  id:'photo',name:'Photography walk',location:'Market streets',durationMinutes:90,
+  cost:{cash:50,energy:1},preview:{description:'Take a hike with friends and look at the world differently.'},
+  scenes:[
+    {title:'Out on the trail',text:'You went on a hike with some friends.'},
+    {title:'Inspiration received!',text:'You took some selfies and pictures too. A new test idea is waiting back at the garage.'}
+  ],
+  effects:[{id:'changing-light-test',timing:'immediate',type:'test-unlock',value:'changing-light-photo',label:'Changing-light photo test unlocked'}]
+});
+
+addActivity({
+  id:'grandma',name:'Call Grandma',location:'Phone call',durationMinutes:60,
+  cost:{cash:0,energy:1},preview:{description:'Make time for a family call.'},
+  scenes:[
+    {title:'A good call',text:'You call Grandma for a fun chat filled with laughter.'},
+    {title:'Grandma has been talking',text:'Apparently she told her senior-citizen WhatsApp group about you! The response arrives with tonight’s settlement.'}
+  ],
+  effects:[{id:'word-of-mouth',timing:'settlement',type:'users',amount:4,label:'Grandma’s WhatsApp referrals'}]
+});
 
 /* ---------- seeded RNG (real randomness, reproducible per build) ---------- */
 function mulberry32(seed){return function(){seed|=0;seed=seed+0x6D2B79F5|0;let t=Math.imul(seed^seed>>>15,1|seed);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
@@ -76,8 +156,8 @@ const ORACLE_V2_QUESTIONS = [
   ]}
 ];
 
-const ORACLE_V2_COSTS = Object.freeze({build:{credits:80,hours:1,focus:1},test:{credits:20,hours:.5,focus:0},revise:{credits:36,hours:.75,focus:1}});
-const ORACLE_DAY8_COSTS = Object.freeze({build:{credits:180,hours:1,focus:1},test:{credits:20,hours:.5,focus:0}});
+const ORACLE_V2_COSTS = Object.freeze({build:{credits:80,hours:1,energy:1},test:{credits:20,hours:.5,energy:0},revise:{credits:36,hours:.75,energy:1}});
+const ORACLE_DAY8_COSTS = Object.freeze({build:{credits:180,hours:1,energy:1},test:{credits:20,hours:.5,energy:0}});
 const ORACLE_DAY8_OPTIONS = Object.freeze([
   {id:'local',label:'Keep label reading available on the phone',note:'Use a smaller on-device model when the clinic loses its connection.',line:'When the connection drops, read supported labels with the on-device model.'},
   {id:'decline',label:'Explain that ClearRead is offline',note:'Do not attempt a reading until the clinic reconnects.',line:'When the connection drops, explain that label reading is unavailable.'}
@@ -383,8 +463,9 @@ const questionFor = (t,slot) => t?.questions?.[slot] || QUESTIONS.find(q=>q.slot
    State
    ============================================================ */
 const initialState = () => ({
-  day:7, time:9, cash:700, credits:80, focus:4, users:84,
+  day:7, time:9, cash:700, credits:80, energy:4, users:84,
   aiDaily:2.25,
+  inflationMultiplier:1,
   // pipeline
   sceneQueue:[], scenesSeen:{},
   morningDone:false, selectedTaskId:'', inviteShown:false, oracleIntroDone:false,
@@ -395,7 +476,8 @@ const initialState = () => ({
   oracleDay8:{stage:'question',answer:'',behavior:'',evidence:[],release:null},
   shipped:false, copy:'', copyType:'', issueResolved:false,pendingLaunch:null,launchSettlement:null,
   demoAttended:false, demoResult:'',
-  activityIds:[], activitySpend:0,
+  activityIds:[], activitySpend:0, activitySeed:Math.floor(Math.random()*0xFFFFFFFF),
+  activityResults:{}, activityLedger:[], postedActivityEntries:{}, learnedLessons:[], unlockedTests:[],
   // consequences ledger
   exposures:[], trustPenalty:0, fitAtShip:'closed', _blewOvernight:false,
   // day accounting
@@ -448,8 +530,80 @@ const aiDailyDifference = delta => aiDailyAfter(delta)-S.aiDaily;
 const operatingCashFor = hours => dailyProductResult()*(hours/OPERATING_HOURS);
 const activities = () => (S.activityIds||[]).map(id=>ACTIVITIES[id]).filter(Boolean);
 const didActivity = id => (S.activityIds||[]).includes(id);
-const activityEventBonus = () => activities().reduce((sum,a)=>sum+(a.eventBonus||0),0);
-const activityLaunchUsers = (type,t) => type==='honest'&&t?.app==='ClearRead' ? activities().reduce((sum,a)=>sum+(a.launchUsers||0),0) : 0;
+const activityInflation = () => Math.max(0.01,Number(S.inflationMultiplier)||1);
+const scaleActivityMoney = amount => Math.round(Number(amount||0)*activityInflation()*100)/100;
+const activityCashCost = activity => scaleActivityMoney(activity.cost.cash);
+const activityHours = activity => activity.durationMinutes/60;
+const activityResult = id => S.activityResults?.[id]||null;
+const activityLedgerEntries = () => S.activityLedger||[];
+
+function activityHash(value){
+  let hash=2166136261;
+  for(const char of String(value)){hash^=char.charCodeAt(0);hash=Math.imul(hash,16777619);}
+  return hash>>>0;
+}
+
+function chooseActivityOutcome(activity){
+  if(!activity.outcomes.length)return null;
+  const rng=mulberry32((S.activitySeed^activityHash(`${S.day}:${activity.id}`))>>>0);
+  return activity.outcomes[Math.floor(rng()*activity.outcomes.length)];
+}
+
+function recordActivityEntry(activity,effectId,resource,amount,timing,label,detail=''){
+  const id=`day-${S.day}:activity:${activity.id}:${effectId}`;
+  if(activityLedgerEntries().some(entry=>entry.id===id))return null;
+  const entry=Object.freeze({
+    id,day:S.day,source:Object.freeze({type:'activity',id:activity.id,name:activity.name}),
+    resource,amount,timing,label,detail,inflationMultiplier:activityInflation()
+  });
+  S.activityLedger.push(entry);
+  if(timing==='immediate')S.postedActivityEntries[id]=true;
+  return entry;
+}
+
+function applyActivityEffect(activity,effect,outcomeId,index){
+  const suffix=outcomeId?`${outcomeId}:${effect.id||index}`:(effect.id||index);
+  const amount=effect.monetary?scaleActivityMoney(effect.amount):Number(effect.amount||0);
+  const entry=recordActivityEntry(activity,suffix,effect.type,amount,effect.timing,effect.label||activity.name,effect.value||'');
+  if(!entry||effect.timing!=='immediate')return;
+  if(effect.type==='energy')S.energy=Math.max(0,Math.min(5,S.energy+amount));
+  if(effect.type==='cash')S.cash+=amount;
+  if(effect.type==='users')S.users=Math.max(0,S.users+amount);
+  if(effect.type==='lesson'&&!S.learnedLessons.includes(effect.value))S.learnedLessons.push(effect.value);
+  if(effect.type==='test-unlock'&&!S.unlockedTests.includes(effect.value))S.unlockedTests.push(effect.value);
+}
+
+function postActivitySettlementEntries(){
+  const posted=[];
+  activityLedgerEntries().forEach(entry=>{
+    if(entry.day!==S.day||entry.timing!=='settlement'||S.postedActivityEntries[entry.id])return;
+    if(entry.resource==='cash')S.cash+=entry.amount;
+    if(entry.resource==='users')S.users=Math.max(0,S.users+entry.amount);
+    S.postedActivityEntries[entry.id]=true;
+    posted.push(entry);
+  });
+  return posted;
+}
+
+function currentActivityEntries(){return activityLedgerEntries().filter(entry=>entry.day===S.day);}
+
+function activitySettlementRows(entries){
+  return entries.map(entry=>{
+    if(entry.resource==='cash')return [`${entry.source.name} · ${entry.label}`,`${entry.amount>=0?'+':'−'}${plainMoney(Math.abs(entry.amount))}`];
+    if(entry.resource==='users')return [`${entry.source.name} · ${entry.label}`,`${entry.amount>=0?'+':'−'}${Math.abs(entry.amount)} users`];
+    return null;
+  }).filter(Boolean);
+}
+
+function activityImpact(activity){
+  const result=activityResult(activity.id),entries=currentActivityEntries().filter(entry=>entry.source.id===activity.id);
+  const energy=entries.filter(entry=>entry.resource==='energy').reduce((sum,entry)=>sum+entry.amount,0);
+  const notes=[];
+  if(result?.outcomeText)notes.push(result.outcomeText);
+  entries.filter(entry=>entry.resource==='lesson'||entry.resource==='test-unlock').forEach(entry=>notes.push(entry.detail||entry.label));
+  if(energy)notes.push(`Energy ${energy>0?'+':''}${energy}.`);
+  return `<div class="impact"><b>Outside activity · ${activity.name}</b>${notes.join(' ')||'Completed and recorded.'}</div>`;
+}
 
 function advanceTime(hours){
   const actual = Math.max(0, Math.min(hours, 24 - S.time));
@@ -516,7 +670,7 @@ const collisionAt=(x,y)=>collisionShapes.find(r=>x>=r.x1&&x<=r.x2&&y>=r.y1&&y<=r
 
 function openModal(content, closable=true){$('overlay').hidden=false;$('modal').innerHTML=content;if(closable)$('modal').querySelectorAll('[data-close]').forEach(close=>close.onclick=closeModal);}
 function closeModal(){$('overlay').hidden=true;$('modal').innerHTML='';render();}
-function resourceBar(){return `<div class="resource-bar" aria-label="Resources before this action"><span>Cash <b>${plainMoney(S.cash)}</b></span><span>AI credits <b>${Math.floor(S.credits)} ⚡</b></span><span>Focus <b>${S.focus}/5</b></span><span>Clock <b>${timeText()}</b></span></div>`;}
+function resourceBar(){return `<div class="resource-bar" aria-label="Resources before this action"><span>Cash <b>${plainMoney(S.cash)}</b></span><span>AI credits <b>${Math.floor(S.credits)} ⚡</b></span><span>Energy <b>${S.energy}/5</b></span><span>Clock <b>${timeText()}</b></span></div>`;}
 
 function loopPhase(){if(!S.morningDone)return'morning';if(!S.selectedTaskId)return'choose';if(!S.build)return'build';if(!allPassed())return'test';if(!S.shipped)return'ship';return'settle';}
 
@@ -530,7 +684,7 @@ function render(){
   $('hud-margin').textContent = fmtDay(net);
   $('hud-margin-note').textContent = `user revenue minus daily AI cost`;
   $('hud-compute').textContent = `${Math.floor(S.credits)} ⚡`;
-  $('hud-energy').textContent = `${S.focus} / 5`;
+  $('hud-energy').textContent = `${S.energy} / 5`;
   $('hud-runway').textContent = `${Math.max(0,runway()).toFixed(1)} days`;
   $('eco-net').textContent = fmtDay(net);
   $('eco-net').style.color = net>=0?'var(--green)':'var(--red)';
@@ -654,7 +808,7 @@ function showIncidentScene(){
         aside:'It didn’t say so because nobody ever told it to. ORACLE builds exactly what it is asked — nothing more.'},
       {speaker:'FOUNDER · 09:00, DAY 7', title:'Morning', html:`
         <p>84 people use ClearRead every day. Last night it failed the one person it was built for.</p>
-        <p>One day. One product focus. Build, test, revise, and release while the clock and resources last.</p>`,
+        <p>One day. One product priority. Build, test, revise, and release while the clock and resources last.</p>`,
         aside:'The money, briefly: 84 users generate $7.56/day. ClearRead costs $2.25/day in AI to run, leaving $5.31 before $105 in rent and tools. Cash lasts about 7.0 days if nothing changes.'}
     ],
     doneLabel:'Open the product board',
@@ -690,7 +844,7 @@ function taskEconomyPreview(t){
 
 function showTaskBoard(){
   const set = taskSet(), ids = Object.keys(set);
-  openModal(`<div class="modal-head"><div><div class="micro">Product board · day ${S.day}</div><h2 id="modal-title">Which problem gets today?</h2><p>Choose one product focus. Some cards improve an existing product; a card marked “New product” starts a separate app. You may revise, rebuild, and retest while time and resources remain.</p></div></div>
+  openModal(`<div class="modal-head"><div><div class="micro">Product board · day ${S.day}</div><h2 id="modal-title">Which problem gets today?</h2><p>Choose one product priority. Some cards improve an existing product; a card marked “New product” starts a separate app. You may revise, rebuild, and retest while time and resources remain.</p></div></div>
   <div class="modal-body"><div class="task-grid">${ids.map((id,i)=>{const t=set[id];return `
     <article class="task-card ${i===0?'featured':''}">
       <div class="task-art" style="background-position:${(t.art%3)*50}% ${t.art>2?100:0}%;background-image:url('${ASSET.taskArt}')"></div>
@@ -789,8 +943,8 @@ function showOracleV2Brief(){
   const cost=ORACLE_V2_COSTS.build,needsPack=S.credits<cost.credits+ORACLE_V2_COSTS.test.credits;
   const packText=needsPack?`Buy ${CREDIT_PACK} Credits for ${plainMoney(DAY7_PACK_PRICE)}, then use ${cost.credits} Credits for the build.`:`Use ${cost.credits} prepaid Credits for the build.`;
   oracleV2Shell({art:ASSET.oracleBuild,artClass:'build',eyebrow:'ORACLE · CLEARREAD 0.7.5 BUILD PLAN',title:'Your two decisions become four saved behaviors.',
-    lede:'Review the exact product behavior before spending Cash, Credits, time, or Focus.',body:oracleV2BehaviorList()+`<div class="plain-rule"><b>Build receipt:</b> ${packText} ${cost.hours} hour · ${cost.focus} Focus. Direct purchases post immediately; operating revenue and AI cost accrue while the hour passes.</div>`,
-    choices:`<button class="oracle-v2-choice primary" id="v2-build"><strong>${needsPack?`Buy Credits and build · ${plainMoney(DAY7_PACK_PRICE)}`:'Build ClearRead 0.7.5'}</strong><span>Cash ${plainMoney(S.cash)} → ${plainMoney(S.cash-(needsPack?DAY7_PACK_PRICE:0))} · Credits ${Math.floor(S.credits)} → ${Math.floor(S.credits+(needsPack?CREDIT_PACK:0)-cost.credits)} · Focus ${S.focus} → ${S.focus-cost.focus}</span></button>`,
+    lede:'Review the exact product behavior before spending Cash, Credits, time, or Energy.',body:oracleV2BehaviorList()+`<div class="plain-rule"><b>Build receipt:</b> ${packText} ${cost.hours} hour · ${cost.energy} Energy. Direct purchases post immediately; operating revenue and AI cost accrue while the hour passes.</div>`,
+    choices:`<button class="oracle-v2-choice primary" id="v2-build"><strong>${needsPack?`Buy Credits and build · ${plainMoney(DAY7_PACK_PRICE)}`:'Build ClearRead 0.7.5'}</strong><span>Cash ${plainMoney(S.cash)} → ${plainMoney(S.cash-(needsPack?DAY7_PACK_PRICE:0))} · Credits ${Math.floor(S.credits)} → ${Math.floor(S.credits+(needsPack?CREDIT_PACK:0)-cost.credits)} · Energy ${S.energy} → ${S.energy-cost.energy}</span></button>`,
     footer:'<button class="btn" id="v2-edit">Change the two decisions</button><button class="btn" id="v2-cancel">Back to Garage HQ</button>'});
   $('v2-edit').onclick=()=>{S.oracleV2.question=0;S.oracleV2.answers={};S.oracleV2.stage='question';showOracleV2Question();};
   $('v2-cancel').onclick=closeModal;
@@ -798,10 +952,10 @@ function showOracleV2Brief(){
 }
 
 function saveOracleV2Build(needsPack){
-  const cost=ORACLE_V2_COSTS.build;if(S.build?.kind==='oracle-v2'||S.focus<cost.focus||S.time+cost.hours>24)return;
+  const cost=ORACLE_V2_COSTS.build;if(S.build?.kind==='oracle-v2'||S.energy<cost.energy||S.time+cost.hours>24)return;
   if(needsPack){if(S.cash<DAY7_PACK_PRICE)return;S.cash-=DAY7_PACK_PRICE;S.credits+=CREDIT_PACK;S.purchaseSpend+=DAY7_PACK_PRICE;}
   if(S.credits<cost.credits)return;
-  S.credits-=cost.credits;S.focus-=cost.focus;advanceTime(cost.hours);S.productVersion='0.7.5';S.version=5;
+  S.credits-=cost.credits;S.energy-=cost.energy;advanceTime(cost.hours);S.productVersion='0.7.5';S.version=5;
   S.build={kind:'oracle-v2',answers:{...S.oracleV2.answers},behaviors:[...S.oracleV2.behaviors],cost:cost.credits,instruction:S.oracleV2.behaviors.join(' '),defect:false};
   S.tested=false;S.testResults=[];S.oracleV2.stage='build';render();showOracleV2DevTestOffer();
 }
@@ -821,7 +975,7 @@ function showOracleV2CustomerTest(){
   const cost=ORACLE_V2_COSTS.test;
   oracleV2Shell({art:ASSET.user47,eyebrow:'CUSTOMER EVIDENCE · REPORTED PHOTO',title:'Does 0.7.5 fix the failure USER_0047 reported?',
     lede:'Dev chose this test because it reproduces the exact glossy-label failure. If the build handles this photograph, the reported incident is fixed.',body:oracleV2BehaviorList(),
-    choices:`<button class="oracle-v2-choice primary" id="v2-customer-test"><strong>Test USER_0047’s photo</strong><span>${cost.hours*60} minutes · ${cost.credits} Credits · no Focus</span></button>`,
+    choices:`<button class="oracle-v2-choice primary" id="v2-customer-test"><strong>Test USER_0047’s photo</strong><span>${cost.hours*60} minutes · ${cost.credits} Credits · no Energy</span></button>`,
     footer:'<button class="btn" id="v2-pause">Return to Garage HQ</button>'});
   $('v2-pause').onclick=closeModal;
   $('v2-customer-test').onclick=()=>{
@@ -874,15 +1028,15 @@ function showOracleV2Diagnosis(message=''){
 
 function showOracleV2Patch(){
   const revise=ORACLE_V2_COSTS.revise,test=ORACLE_V2_COSTS.test;
-  const cost={credits:revise.credits+test.credits,hours:revise.hours+test.hours,focus:revise.focus};
+  const cost={credits:revise.credits+test.credits,hours:revise.hours+test.hours,energy:revise.energy};
   oracleV2Shell({art:ASSET.oracle,eyebrow:'ORACLE · FOCUSED REVISION',title:'Make every new photo start clean.',
     lede:'Keep the four chosen behaviors. Add one implementation rule: clear the previous photo before a new reading begins.',
     body:oracleV2BehaviorList()+`<div class="oracle-v2-result"><strong>Added implementation rule</strong><span>Clear the previous photo before reading a new one.</span></div>`,
-    choices:`<button class="oracle-v2-choice primary" id="v2-patch"><strong>Revise and rerun both photos</strong><span>${cost.hours*60} minutes · ${cost.credits} Credits · ${cost.focus} Focus</span></button>`,
+    choices:`<button class="oracle-v2-choice primary" id="v2-patch"><strong>Revise and rerun both photos</strong><span>${cost.hours*60} minutes · ${cost.credits} Credits · ${cost.energy} Energy</span></button>`,
     footer:'<button class="btn" id="v2-patch-back">Back to the diagnosis</button>'});
   $('v2-patch-back').onclick=showOracleV2Diagnosis;
   $('v2-patch').onclick=()=>{
-    if(S.credits<cost.credits||S.focus<cost.focus||S.time+cost.hours>24)return;S.credits-=cost.credits;S.focus-=cost.focus;advanceTime(cost.hours);
+    if(S.credits<cost.credits||S.energy<cost.energy||S.time+cost.hours>24)return;S.credits-=cost.credits;S.energy-=cost.energy;advanceTime(cost.hours);
     S.productVersion='0.7.6';S.version=6;S.oracleV2.patch='Clear the previous photo before reading a new one.';S.oracleV2.secondPhoto='pass';
     S.testResults=S.testResults.map(r=>({...r,pass:true,detail:r.slot==='second'?'ClearRead clears the previous photo before reading the next one.':r.detail}));
     S.oracleV2.evidence=S.oracleV2.evidence.map(e=>({...e,result:'pass'}));S.oracleV2.stage='revised';render();showOracleV2Revised();
@@ -971,7 +1125,7 @@ function showOracleDay8BriefV2(){
   const build=ORACLE_DAY8_COSTS.build,test=ORACLE_DAY8_COSTS.test;
   oracleV2Shell({art:ASSET.oracleBuild,artClass:'build',eyebrow:'ORACLE · CLEARREAD 0.8.0 BUILD PLAN',title:'Keep yesterday’s build. Add one offline rule.',
     lede:'The 200-Credit update package covers the implementation and its clinic replay: 180 Credits to build, then 20 Credits to test.',
-    body:day8BehaviorList()+`<div class="plain-rule"><b>Day 8 receipt:</b> Buy ${CREDIT_PACK} Credits for ${plainMoney(DAY8_PACK_PRICE)}. Build: ${build.credits} Credits · ${build.hours} hour · ${build.focus} Focus. Test: ${test.credits} Credits · ${test.hours*60} minutes. Cash and Credits post only after confirmation.</div>`,
+    body:day8BehaviorList()+`<div class="plain-rule"><b>Day 8 receipt:</b> Buy ${CREDIT_PACK} Credits for ${plainMoney(DAY8_PACK_PRICE)}. Build: ${build.credits} Credits · ${build.hours} hour · ${build.energy} Energy. Test: ${test.credits} Credits · ${test.hours*60} minutes. Cash and Credits post only after confirmation.</div>`,
     choices:`<button class="oracle-v2-choice primary" id="day8-v2-buy"><strong>Buy 200 Credits and build 0.8.0 · ${plainMoney(DAY8_PACK_PRICE)}</strong><span>Cash ${plainMoney(S.cash)} → ${plainMoney(S.cash-DAY8_PACK_PRICE)} · Credits ${Math.floor(S.credits)} → ${Math.floor(S.credits+CREDIT_PACK-build.credits)} after the build</span></button>`,
     footer:'<button class="btn" id="day8-v2-edit">Change the offline rule</button><button class="btn" id="day8-v2-cancel">Back to Garage HQ</button>'});
   $('day8-v2-edit').onclick=()=>{S.oracleDay8.stage='question';showOracleDay8QuestionV2();};$('day8-v2-cancel').onclick=closeModal;
@@ -981,18 +1135,18 @@ function showOracleDay8BriefV2(){
 function showOracleDay8PurchaseConfirm(){
   const beforeCash=S.cash,beforeCredits=S.credits,cost=ORACLE_DAY8_COSTS.build;
   oracleV2Shell({art:ASSET.oracleBuild,artClass:'build',eyebrow:'CONFIRM · DAY 8 CREDIT PURCHASE',title:'Spend $180 on the update package?',
-    lede:'Nothing is spent until you confirm. Cancelling returns to the build plan without changing Cash, Credits, Focus, or time.',
+    lede:'Nothing is spent until you confirm. Cancelling returns to the build plan without changing Cash, Credits, Energy, or time.',
     body:`<div class="oracle-v2-result"><strong>Cash</strong><span>${plainMoney(beforeCash)} → ${plainMoney(beforeCash-DAY8_PACK_PRICE)}</span></div><div class="oracle-v2-result"><strong>Prepaid AI Credits after the build</strong><span>${Math.floor(beforeCredits)} + ${CREDIT_PACK} − ${cost.credits} = ${Math.floor(beforeCredits+CREDIT_PACK-cost.credits)} Credits</span></div>`,
-    choices:`<button class="oracle-v2-choice primary" id="day8-v2-confirm"><strong>Buy Credits and build the update</strong><span>${cost.hours} hour · ${cost.focus} Focus · clinic test remains ready at the Test Bench</span></button>`,
+    choices:`<button class="oracle-v2-choice primary" id="day8-v2-confirm"><strong>Buy Credits and build the update</strong><span>${cost.hours} hour · ${cost.energy} Energy · clinic test remains ready at the Test Bench</span></button>`,
     footer:'<button class="btn" id="day8-v2-confirm-cancel">Cancel</button>'});
   $('day8-v2-confirm-cancel').onclick=showOracleDay8BriefV2;
   $('day8-v2-confirm').onclick=saveOracleDay8Build;
 }
 
 function saveOracleDay8Build(){
-  const cost=ORACLE_DAY8_COSTS.build;if(S.build?.kind==='oracle-v2-day8'||S.cash<DAY8_PACK_PRICE||S.focus<cost.focus||S.time+cost.hours>24)return;
+  const cost=ORACLE_DAY8_COSTS.build;if(S.build?.kind==='oracle-v2-day8'||S.cash<DAY8_PACK_PRICE||S.energy<cost.energy||S.time+cost.hours>24)return;
   S.cash-=DAY8_PACK_PRICE;S.credits+=CREDIT_PACK;S.purchaseSpend+=DAY8_PACK_PRICE;
-  if(S.credits<cost.credits)return;S.credits-=cost.credits;S.focus-=cost.focus;advanceTime(cost.hours);S.productVersion='0.8.0';S.version=8;
+  if(S.credits<cost.credits)return;S.credits-=cost.credits;S.energy-=cost.energy;advanceTime(cost.hours);S.productVersion='0.8.0';S.version=8;
   S.build={kind:'oracle-v2-day8',behaviors:[...S.oracleV2.behaviors,S.oracleDay8.behavior],cost:cost.credits,instruction:S.oracleDay8.behavior,defect:false};
   S.tested=false;S.testResults=[];S.oracleDay8.stage='build';render();showOracleDay8DevTestOffer();
 }
@@ -1010,7 +1164,7 @@ function showOracleDay8Test(){
   const cost=ORACLE_DAY8_COSTS.test;
   oracleV2Shell({art:ASSET.dev,eyebrow:'TEST BENCH · WESTSIDE CLINIC',title:'Does 0.8.0 behave correctly when the connection disappears?',
     lede:`The replay cuts the clinic’s Wi-Fi during a label reading. The expected result is the offline rule you chose: ${S.oracleDay8.behavior}`,
-    choices:`<button class="oracle-v2-choice primary" id="day8-run-test"><strong>Run the outage replay</strong><span>${cost.hours*60} minutes · ${cost.credits} Credits · no Focus</span></button>`,footer:'<button class="btn" id="day8-test-back">Back to Garage HQ</button>'});
+    choices:`<button class="oracle-v2-choice primary" id="day8-run-test"><strong>Run the outage replay</strong><span>${cost.hours*60} minutes · ${cost.credits} Credits · no Energy</span></button>`,footer:'<button class="btn" id="day8-test-back">Back to Garage HQ</button>'});
   $('day8-test-back').onclick=closeModal;$('day8-run-test').onclick=runOracleDay8Test;
 }
 
@@ -1088,8 +1242,8 @@ function showBuildChoice(){
   const t=task();
   const answered = QUESTIONS.every(q=>S.answers[q.slot]);
   if(!answered){showQuestion();return;}
-  const quick = {credits:90, hours:1, focus:1};
-  const careful = {credits:180, hours:1.5, focus:1};
+  const quick = {credits:90, hours:1, energy:1};
+  const careful = {credits:180, hours:1.5, energy:1};
   const quickRepeat=repeatBuildBlocked('quick'),carefulRepeat=repeatBuildBlocked('careful');
   const revision = S.build ? `This replaces build v${S.version} — a fresh build, paid again.` : '';
   openModal(`<div class="modal-head"><div><div class="micro">ORACLE · ${t.app} · ${t.title}</div><h2 id="modal-title">Your instruction is ready</h2><p>Change any answer, then choose how the build is made. ${revision}</p>${resourceBar()}</div></div>
@@ -1099,21 +1253,21 @@ function showBuildChoice(){
     <div class="build-choice">
       <div class="build-card">
         <h3>Quick build</h3>
-        <div class="price">${quick.credits} prepaid ⚡ · ${quick.hours}h · ${quick.focus} Focus · operating cash ${money(operatingCashFor(quick.hours))}</div>
+        <div class="price">${quick.credits} prepaid ⚡ · ${quick.hours}h · ${quick.energy} Energy · operating cash ${money(operatingCashFor(quick.hours))}</div>
         <p>“The cheap way. Plainly: a quick build is <b>more likely to leave a coding bug</b> — even in behaviors you chose correctly. We’ll only know when we test.”</p>
-        <p style="font-size:12px;color:var(--muted)">If a bug slips through: finding it costs a test run (30 ⚡ · 1h · 1 Focus), and fixing it costs another generated build. A late bug can cost you the ${clockText(eventDeadline(t))} customer event.</p>
-        <button class="btn cyan" id="build-quick" ${quickRepeat||S.credits<quick.credits||S.focus<quick.focus||S.time+quick.hours>24?'disabled':''}>${quickRepeat?'Already saved — test this build':'Buy the quick build'}</button>
+        <p style="font-size:12px;color:var(--muted)">If a bug slips through: finding it costs a test run (30 ⚡ · 1h · 1 Energy), and fixing it costs another generated build. A late bug can cost you the ${clockText(eventDeadline(t))} customer event.</p>
+        <button class="btn cyan" id="build-quick" ${quickRepeat||S.credits<quick.credits||S.energy<quick.energy||S.time+quick.hours>24?'disabled':''}>${quickRepeat?'Already saved — test this build':'Buy the quick build'}</button>
       </div>
       <div class="build-card careful">
         <h3>Careful build</h3>
-        <div class="price">${careful.credits} prepaid ⚡ · ${careful.hours}h · ${careful.focus} Focus · operating cash ${money(operatingCashFor(careful.hours))}</div>
+        <div class="price">${careful.credits} prepaid ⚡ · ${careful.hours}h · ${careful.energy} Energy · operating cash ${money(operatingCashFor(careful.hours))}</div>
         <p>“Twice the price. I take my time and check my own work — a coding bug is very unlikely.”</p>
         <p style="font-size:12px;color:var(--muted)">Buys code quality only. It cannot add a behavior that the brief never requested.</p>
-        <button class="btn primary" id="build-careful" ${carefulRepeat||S.credits<careful.credits||S.focus<careful.focus||S.time+careful.hours>24?'disabled':''}>${carefulRepeat?'Already saved — test this build':'Buy the careful build'}</button>
+        <button class="btn primary" id="build-careful" ${carefulRepeat||S.credits<careful.credits||S.energy<careful.energy||S.time+careful.hours>24?'disabled':''}>${carefulRepeat?'Already saved — test this build':'Buy the careful build'}</button>
       </div>
     </div>
     <div class="plain-rule">The brief is the product strategy. Tests check whether the build performs each chosen behavior; the incident replay separately shows whether this strategy solves today’s case.</div>
-    ${S.focus<1?'<div class="plain-rule" style="border-left-color:var(--yellow)">Not enough Focus to build — coffee at the bar restores 2 for $18.</div>':''}
+    ${S.energy<1?'<div class="plain-rule" style="border-left-color:var(--yellow)">Not enough Energy to build — coffee at the bar restores 2 for $18.</div>':''}
     <div class="modal-actions">${S.credits<quick.credits?`<button class="btn" id="day7-buy-credits" ${S.cash<DAY7_PACK_PRICE?'disabled':''}>Buy ${CREDIT_PACK} ⚡ · ${plainMoney(DAY7_PACK_PRICE)}</button>`:''}<button class="btn" data-close>Back to the garage</button></div>
   </div>`);
   $('modal').querySelectorAll('[data-close]').forEach(b=>b.onclick=closeModal);
@@ -1137,9 +1291,9 @@ function sameDay7Build(kind){return day7()&&S.build?.kind===kind&&JSON.stringify
 function repeatBuildBlocked(kind){return sameDay7Build(kind)&&(!S.tested||!S.build.defect);}
 
 function generateDay7(kind,cost){
-  if(repeatBuildBlocked(kind)||S.credits<cost.credits||S.focus<cost.focus||S.time+cost.hours>24)return;
-  const before={credits:S.credits,focus:S.focus,cash:S.cash,time:timeText()};
-  S.credits-=cost.credits;S.focus-=cost.focus;advanceTime(cost.hours);
+  if(repeatBuildBlocked(kind)||S.credits<cost.credits||S.energy<cost.energy||S.time+cost.hours>24)return;
+  const before={credits:S.credits,energy:S.energy,cash:S.cash,time:timeText()};
+  S.credits-=cost.credits;S.energy-=cost.energy;advanceTime(cost.hours);
   S.version+=1;
   const seed=(Date.now()^(S.version*7919))>>>0;
   const rng=mulberry32(seed);
@@ -1156,7 +1310,7 @@ function generateDay7(kind,cost){
   S.tested=false;S.testResults=[];
   closeModal();
   $('world-message').textContent=`Build v${S.version} saved (${kind}). Take it to the Test Bench — the tests replay ${task().person}’s incident.`;
-  toast(`Build v${S.version}: ${before.credits}→${S.credits} ⚡ · Focus ${before.focus}→${S.focus} · cash ${plainMoney(before.cash)}→${plainMoney(S.cash)}`);
+  toast(`Build v${S.version}: ${before.credits}→${S.credits} ⚡ · Energy ${before.energy}→${S.energy} · cash ${plainMoney(before.cash)}→${plainMoney(S.cash)}`);
   render();
 }
 
@@ -1207,7 +1361,7 @@ function showDay8Question(slot){
 
 function showDay8BuildChoice(){
   const t=task();
-  const standard={credits:120,hours:1,focus:1},reviewed={credits:240,hours:1.5,focus:1};
+  const standard={credits:120,hours:1,energy:1},reviewed={credits:240,hours:1.5,energy:1};
   const same=(kind)=>S.build?.kind===kind&&JSON.stringify(S.build.chips||[])===JSON.stringify(S.selected||[])&&(!S.tested||!S.build.defect);
   const standardRepeat=same('standard'),reviewedRepeat=same('reviewed');
   openModal(`<div class="modal-head"><div><div class="micro">ORACLE STUDIO · ${t.app} · ${t.title}</div><h2 id="modal-title">Choose how ORACLE implements the brief</h2><p>The same four product questions lead to the same two build choices. A reviewed build costs more because ORACLE checks the generated code before handing it back.</p>${resourceBar()}</div><button class="close" data-close aria-label="Close">×</button></div>
@@ -1217,14 +1371,14 @@ function showDay8BuildChoice(){
     <div class="prompt-readback"><span class="slot-label">GENERATED BUILD BRIEF</span>${promptSentence()}</div>
     <div class="build-choice">
       <div class="build-card"><h3>Standard build</h3>
-        <div class="price">${standard.credits} prepaid ⚡ · ${standard.hours}h · ${standard.focus} Focus · operating cash ${money(operatingCashFor(standard.hours))}</div>
+        <div class="price">${standard.credits} prepaid ⚡ · ${standard.hours}h · ${standard.energy} Energy · operating cash ${money(operatingCashFor(standard.hours))}</div>
         <p>ORACLE generates the code once. Your four requirements remain exactly as written; the Test Bench reveals whether the implementation needs another pass.</p>
-        <button class="btn cyan" id="build-standard" ${standardRepeat||coverageCount()<1||S.credits<standard.credits||S.focus<standard.focus||S.time+standard.hours>24?'disabled':''}>${standardRepeat?'Already saved — test this build':'Buy the Standard build'}</button>
+        <button class="btn cyan" id="build-standard" ${standardRepeat||coverageCount()<1||S.credits<standard.credits||S.energy<standard.energy||S.time+standard.hours>24?'disabled':''}>${standardRepeat?'Already saved — test this build':'Buy the Standard build'}</button>
       </div>
       <div class="build-card careful"><h3>Reviewed build</h3>
-        <div class="price">${reviewed.credits} prepaid ⚡ · ${reviewed.hours}h · ${reviewed.focus} Focus · operating cash ${money(operatingCashFor(reviewed.hours))}</div>
+        <div class="price">${reviewed.credits} prepaid ⚡ · ${reviewed.hours}h · ${reviewed.energy} Energy · operating cash ${money(operatingCashFor(reviewed.hours))}</div>
         <p>ORACLE generates the same brief, then checks the implementation before returning it. This buys code review; it cannot invent a requirement you left out.</p>
-        <button class="btn primary" id="build-reviewed" ${reviewedRepeat||coverageCount()<1||S.credits<reviewed.credits||S.focus<reviewed.focus||S.time+reviewed.hours>24?'disabled':''}>${reviewedRepeat?'Already saved — test this build':'Buy the Reviewed build'}</button>
+        <button class="btn primary" id="build-reviewed" ${reviewedRepeat||coverageCount()<1||S.credits<reviewed.credits||S.energy<reviewed.energy||S.time+reviewed.hours>24?'disabled':''}>${reviewedRepeat?'Already saved — test this build':'Buy the Reviewed build'}</button>
       </div>
     </div>
     <div class="plain-rule">Omitted requirements fail because they were never requested. An implementation defect is different: you requested the behavior, but the generated code needs another pass. The Test Bench names which one happened.</div>
@@ -1252,9 +1406,9 @@ function confirmCreditPurchase(returnTo=showDay8BuildChoice){
 }
 
 function generateDay8(kind,cost){
-  if(cost.credits>S.credits||S.focus<cost.focus||S.time+cost.hours>24)return;
-  const before={credits:S.credits,focus:S.focus,cash:S.cash};
-  S.credits-=cost.credits;S.focus-=cost.focus;advanceTime(cost.hours);
+  if(cost.credits>S.credits||S.energy<cost.energy||S.time+cost.hours>24)return;
+  const before={credits:S.credits,energy:S.energy,cash:S.cash};
+  S.credits-=cost.credits;S.energy-=cost.energy;advanceTime(cost.hours);
   S.version+=1;
   const seed=(Date.now()^(S.version*104729))>>>0;
   const req=requiredChips().map(c=>c.id).filter(id=>S.selected.includes(id));
@@ -1267,7 +1421,7 @@ function generateDay8(kind,cost){
   $('world-message').textContent=task().id==='bill'
     ? `Build v${S.version} saved — the optimization is not live yet. Test it, then record a launch; the daily AI cost changes only at midnight.`
     : `Build v${S.version} saved — ${coverageCount()}/4 requirements included. The Test Bench checks the brief and the code.`;
-  toast(`Build v${S.version}: ${before.credits}→${S.credits} ⚡ · Focus ${before.focus}→${S.focus} · cash ${plainMoney(before.cash)}→${plainMoney(S.cash)}`);
+  toast(`Build v${S.version}: ${before.credits}→${S.credits} ⚡ · Energy ${before.energy}→${S.energy} · cash ${plainMoney(before.cash)}→${plainMoney(S.cash)}`);
   render();
 }
 
@@ -1292,7 +1446,7 @@ function runTestRows(){
         why:pass?'':`The instruction never included “${chip.text}”. ORACLE built exactly what you asked.`,fix:pass?'':'oracle'};
     });
   }
-  if(didActivity('photo')){
+  if(S.unlockedTests.includes('changing-light-photo')){
     const pass=day7()&&(b.answers.context==='glare'||b.answers.goal==='enhance');
     rows.push({name:'Changing-light photo',detail:'The photography walk supplied the same label moving from shade into glare.',slot:'activity',pass,
       why:pass?'':'The build brief never targeted glare or photo cleanup. Revise that product decision at ORACLE.',fix:pass?'':'oracle'});
@@ -1318,15 +1472,15 @@ function showTest(){
   if(!S.build){openModal(`<div class="modal-head"><div><div class="micro">Test bench</div><h2 id="modal-title">Nothing to test yet</h2><p>Describe the build at ORACLE first — the tests replay the incident against whatever you actually asked for.</p></div><button class="close" data-close>×</button></div><div class="modal-body"><div class="modal-actions"><button class="btn primary" id="go-oracle">Walk to ORACLE</button></div></div>`);$('modal').querySelector('[data-close]').onclick=closeModal;$('go-oracle').onclick=()=>{closeModal();autoWalk('oracle');};return;}
   if(!S.tested){
     const rows=runTestRows(),cost=30;
-    openModal(`<div class="modal-head"><div><div class="micro">Test bench · ${task().app} · build v${S.version}</div><h2 id="modal-title">Replay the incident</h2><p>${task().person}’s case, re-run against the saved build · ${cost} prepaid ⚡ · 1 Focus · 1 hour · operating cash ${money(operatingCashFor(1))}.</p>${resourceBar()}</div><button class="close" data-close>×</button></div>
+    openModal(`<div class="modal-head"><div><div class="micro">Test bench · ${task().app} · build v${S.version}</div><h2 id="modal-title">Replay the incident</h2><p>${task().person}’s case, re-run against the saved build · ${cost} prepaid ⚡ · 1 Energy · 1 hour · operating cash ${money(operatingCashFor(1))}.</p>${resourceBar()}</div><button class="close" data-close>×</button></div>
     <div class="modal-body">
       <div class="test-list">${rows.map(x=>`<div class="test-row"><span class="icon">○</span><div><b>${x.name}</b><small>${x.detail}</small></div><strong>NOT RUN</strong></div>`).join('')}</div>
       <div class="plain-rule">Two different ways to miss here: a product behavior absent from the build brief, or an implementation defect in a behavior you selected. The results identify which one happened and route you to the right fix.</div>
-      ${S.focus<1?'<div class="plain-rule" style="border-left-color:var(--yellow)">Not enough Focus to test — coffee at the bar restores 2 for $18.</div>':''}
-      <div class="modal-actions"><button class="btn" data-close>Back</button><button class="btn primary" id="run-tests" ${S.credits<cost||S.focus<1||S.time+1>24?'disabled':''}>Run the tests · ${cost} ⚡ · 1 Focus · 1h</button></div>
+      ${S.energy<1?'<div class="plain-rule" style="border-left-color:var(--yellow)">Not enough Energy to test — coffee at the bar restores 2 for $18.</div>':''}
+      <div class="modal-actions"><button class="btn" data-close>Back</button><button class="btn primary" id="run-tests" ${S.credits<cost||S.energy<1||S.time+1>24?'disabled':''}>Run the tests · ${cost} ⚡ · 1 Energy · 1h</button></div>
     </div>`);
     $('modal').querySelectorAll('[data-close]').forEach(b=>b.onclick=closeModal);
-    const run=$('run-tests');if(run&&!run.disabled)run.onclick=()=>{const before={credits:S.credits,focus:S.focus,cash:S.cash};S.credits-=30;S.focus-=1;advanceTime(1);S.tested=true;S.testResults=runTestRows();toast(`Test run: ${before.credits}→${S.credits} ⚡ · Focus ${before.focus}→${S.focus} · cash ${plainMoney(before.cash)}→${plainMoney(S.cash)}`);showTestResults();render();};
+    const run=$('run-tests');if(run&&!run.disabled)run.onclick=()=>{const before={credits:S.credits,energy:S.energy,cash:S.cash};S.credits-=30;S.energy-=1;advanceTime(1);S.tested=true;S.testResults=runTestRows();toast(`Test run: ${before.credits}→${S.credits} ⚡ · Energy ${before.energy}→${S.energy} · cash ${plainMoney(before.cash)}→${plainMoney(S.cash)}`);showTestResults();render();};
     return;
   }
   showTestResults();
@@ -1357,15 +1511,24 @@ function activityAvailable(a,t){
   return true;
 }
 
+function activitySceneText(text){
+  return String(text).replace(/\$(\d+(?:\.\d+)?)/g,(_,amount)=>plainMoney(scaleActivityMoney(Number(amount))));
+}
+
+function activityCostBadges(activity){
+  const cash=activityCashCost(activity),energy=activity.cost.energy;
+  const gain=activity.effects.filter(effect=>effect.type==='energy'&&effect.amount>0).reduce((sum,effect)=>sum+effect.amount,0);
+  return `<span class="activity-cost ${cash?'cash-cost':'cash-free'}">${cash?`−${plainMoney(cash)}`:'Free'}</span>${energy?`<span class="activity-cost energy-cost">⚡ −${energy} Energy</span>`:''}${gain?`<span class="activity-cost energy-gain">⚡ +${gain} Energy</span>`:''}`;
+}
+
 function showActivities(){
   const t=task(),done=activities();
   openModal(`<div class="modal-head"><div><div class="micro">Garage exit · outside map</div><h2 id="modal-title">Where do you go next?</h2><p>Take as many different activities as the day, your cash, and the schedule allow. Each location is available once per day.</p></div><button class="close" data-close>×</button></div>
     <div class="modal-body"><div class="task-grid">${Object.values(ACTIVITIES).map(a=>{
-      const used=didActivity(a.id),allowed=activityAvailable(a,t),operations=operatingCashFor(a.hours),total=operations-a.cash;
-      return `<article class="task-card"><div class="inner"><div class="app-type">${a.place} · ${a.hours}h</div><h3>${a.name}</h3><p>${a.effect}</p>
-        <div class="receipt"><b>${used?'Completed today':'Time and cash'}</b><div class="r-row"><span>Direct cost</span><strong>−${plainMoney(a.cash)}</strong></div><div class="r-row"><span>Company operations while away</span><strong>${money(operations)}</strong></div><div class="r-row"><span>Net cash change</span><strong>${money(total)}</strong></div></div>
-        ${allowed?'':`<p>This effect does not connect to today’s selected product state.</p>`}
-        <button class="btn cyan" data-activity="${a.id}" ${used||!allowed||S.cash<a.cash||S.time+a.hours>24?'disabled':''}>${used?'Done today':`Go · cash ${plainMoney(S.cash)} → ${plainMoney(S.cash+total)}`}</button></div></article>`;
+      const used=didActivity(a.id),allowed=activityAvailable(a,t),cashCost=activityCashCost(a),hours=activityHours(a);
+      return `<article class="task-card"><div class="inner"><div class="app-type">${a.location} · ${hours}h</div><div class="activity-title"><h3>${a.name}</h3><div class="activity-costs">${activityCostBadges(a)}</div></div><p>${a.preview.description}</p>
+        ${allowed?'':`<p>This activity is not available for today’s selected product.</p>`}
+        <button class="btn cyan" data-activity="${a.id}" ${used||!allowed||S.cash<cashCost||S.energy<a.cost.energy||S.time+hours>24?'disabled':''}>${used?'Done today':`Go · ${hours}h${cashCost?` · −${plainMoney(cashCost)}`:''}${a.cost.energy?` · −${a.cost.energy} Energy`:''}`}</button></div></article>`;
     }).join('')}</div>${done.length?`<div class="plain-rule"><b>Today so far:</b> ${done.map(a=>a.name).join(' · ')}. You can choose another distinct activity or return to the garage.</div>`:''}</div>`);
   $('modal').querySelectorAll('[data-close]').forEach(b=>b.onclick=closeModal);
   $('modal').querySelectorAll('[data-activity]').forEach(b=>b.onclick=()=>chooseActivity(b.dataset.activity));
@@ -1373,13 +1536,23 @@ function showActivities(){
 
 function chooseActivity(id){
   const a=ACTIVITIES[id],t=task();
-  if(!a||didActivity(id)||!activityAvailable(a,t)||S.cash<a.cash||S.time+a.hours>24)return;
-  const before=S.cash;
-  S.cash-=a.cash;S.activitySpend+=a.cash;advanceTime(a.hours);S.activityIds.push(id);
-  if(a.focus)S.focus=Math.min(5,S.focus+a.focus);
+  if(!a)return;
+  const cashCost=activityCashCost(a),hours=activityHours(a);
+  if(didActivity(id)||!activityAvailable(a,t)||S.cash<cashCost||S.energy<a.cost.energy||S.time+hours>24)return;
+  const before={cash:S.cash,energy:S.energy};
+  S.cash-=cashCost;S.activitySpend+=cashCost;
+  recordActivityEntry(a,'direct-cost','cash',-cashCost,'immediate',`${a.name} direct cost`);
+  if(a.cost.energy){S.energy-=a.cost.energy;recordActivityEntry(a,'energy-cost','energy',-a.cost.energy,'immediate',`${a.name} Energy`);}
+  advanceTime(hours);S.activityIds.push(id);
+  const outcome=chooseActivityOutcome(a);
+  [...a.effects,...(outcome?.effects||[])].forEach((effect,index)=>applyActivityEffect(a,effect,outcome?.id||'',index));
+  S.activityResults[id]=Object.freeze({activityId:id,outcomeId:outcome?.id||'',outcomeTitle:outcome?.title||'',outcomeText:outcome?activitySceneText(outcome.text):'',inflationMultiplier:activityInflation()});
   closeModal();
-  $('world-message').textContent=`Outside block complete: ${a.name}. ${a.effect}`;
-  toast(`${a.name} · cash ${plainMoney(before)} → ${plainMoney(S.cash)} · clock ${timeText()}`);
+  $('world-message').textContent=`Outside activity complete: ${a.name}. The result is recorded for End Day.`;
+  toast(`${a.name} · cash ${plainMoney(before.cash)} → ${plainMoney(S.cash)} · Energy ${before.energy} → ${S.energy}`);
+  const pages=a.scenes.map(scene=>({speaker:`${a.location.toUpperCase()} · ${a.durationMinutes} MINUTES`,title:scene.title,html:`<p>${activitySceneText(scene.text)}</p>`}));
+  if(outcome)pages.push({speaker:`${a.name.toUpperCase()} · OUTCOME`,title:outcome.title,html:`<p>${activitySceneText(outcome.text)}</p><p>The result is saved for End Day settlement.</p>`});
+  showScene({cls:a.id==='meetup'?'stage':'',pages,doneLabel:'Return to Garage HQ',onDone:render});
   render();
 }
 
@@ -1387,12 +1560,12 @@ function chooseActivity(id){
    Coffee
    ============================================================ */
 function useCoffee(){
-  if(S.focus>=5){toast('Focus is already full.');return;}
+  if(S.energy>=5){toast('Energy is already full.');return;}
   if(S.cash<18){toast('Not enough cash for the $18 coffee.');return;}
   if(S.time+0.5>24){toast('Too late for coffee.');return;}
   const operations=operatingCashFor(0.5),total=operations-18;
-  openModal(`<div class="modal-head"><div><div class="micro">Coffee bar · 30 minutes</div><h2 id="modal-title">Restore 2 Focus?</h2><p>Thirty minutes passes, just like any other timed action.</p></div><button class="close" data-close>×</button></div><div class="modal-body"><table class="settle-table"><tr><td>Coffee</td><td>−${plainMoney(18)}</td></tr><tr><td>Company operations while away</td><td>${money(operations)}</td></tr><tr class="total"><td>Cash change</td><td>${money(total)}</td></tr></table><div class="plain-rule">Users keep paying for ClearRead while it serves them, and those same scans keep using AI. This is the same operating calculation used for builds, tests, events, and outside activities.</div><div class="modal-actions"><button class="btn" data-close>Cancel</button><button class="btn primary" id="buy-coffee">Buy coffee · cash ${plainMoney(S.cash)} → ${plainMoney(S.cash+total)}</button></div></div>`);
-  $('buy-coffee').onclick=()=>{const before=S.cash;S.cash-=18;S.coffeeSpend+=18;S.focus=Math.min(5,S.focus+2);advanceTime(0.5);closeModal();toast(`Coffee: cash ${plainMoney(before)}→${plainMoney(S.cash)} · +2 Focus · clock ${timeText()}`);render();};
+  openModal(`<div class="modal-head"><div><div class="micro">Coffee bar · 30 minutes</div><h2 id="modal-title">Restore 2 Energy?</h2><p>Thirty minutes passes, just like any other timed action.</p></div><button class="close" data-close>×</button></div><div class="modal-body"><table class="settle-table"><tr><td>Coffee</td><td>−${plainMoney(18)}</td></tr><tr><td>Company operations while away</td><td>${money(operations)}</td></tr><tr class="total"><td>Cash change</td><td>${money(total)}</td></tr></table><div class="plain-rule">Users keep paying for ClearRead while it serves them, and those same scans keep using AI. This is the same operating calculation used for builds, tests, events, and outside activities.</div><div class="modal-actions"><button class="btn" data-close>Cancel</button><button class="btn primary" id="buy-coffee">Buy coffee · cash ${plainMoney(S.cash)} → ${plainMoney(S.cash+total)}</button></div></div>`);
+  $('buy-coffee').onclick=()=>{const before=S.cash;S.cash-=18;S.coffeeSpend+=18;S.energy=Math.min(5,S.energy+2);advanceTime(0.5);closeModal();toast(`Coffee: cash ${plainMoney(before)}→${plainMoney(S.cash)} · +2 Energy · clock ${timeText()}`);render();};
 }
 
 /* ============================================================
@@ -1450,11 +1623,11 @@ function presentDemo(verified){
   if(S.demoAttended||S.time+1>24)return;
   const cashBefore=S.cash;advanceTime(1);S.demoAttended=true;closeModal();
   if(verified){
-    const payment=task().sponsor+activityEventBonus();
+    const payment=task().sponsor;
     S.sponsorCash=payment;
     S.demoResult=`Working build shown — ${plainMoney(payment)} pending at midnight.`;
     showScene({cls:'stage',pages:[{speaker:eventName(task()).toUpperCase()+' · '+timeText(),title:'The customer accepts the result',html:`
-      <p>${task().person}’s case works in front of them. The <b>${plainMoney(payment)}</b> payment is recorded and will post on the midnight receipt.${activityEventBonus()?` The community-demo contact added ${plainMoney(activityEventBonus())}.`:''}</p><p>Operating cash while presenting: ${plainMoney(cashBefore)} → ${plainMoney(S.cash)}.</p>
+      <p>${task().person}’s case works in front of them. The <b>${plainMoney(payment)}</b> payment is recorded and will post on the midnight receipt.</p><p>Operating cash while presenting: ${plainMoney(cashBefore)} → ${plainMoney(S.cash)}.</p>
       <p>An accepted demo is not a public release. Nothing has been promised to the market yet.</p>`}],
       doneLabel:S.shipped?'Return to Garage HQ':'Decide the release',onDone:S.shipped?()=>render():showRelease});
   }else{
@@ -1538,7 +1711,7 @@ function shipChoice(type){
   S.shipped=true;S.copyType=type;S.copy=type==='honest'?honestClaim():t.hypeCopy;
   S.issueResolved=fr?fr.lvl==='closed':true;
   S.fitAtShip=fr?fr.lvl:'closed';
-  const specBase=provenSegmentUsers(S.build.answers)+activityLaunchUsers(type,t);
+  const specBase=provenSegmentUsers(S.build.answers);
   S.pendingLaunch={type,baseUsers:type==='honest'?specBase:t.hype.users,aiDelta:type==='honest'?t.honest.ai:t.hype.ai,
     preorder:type==='hype'?t.hype.cash:0,exposure:type==='hype'?t.hype.exposure:0,
     odds:Math.min(0.85,(t.hypeOdds||0.5)+(fr&&fr.lvl!=='closed'?0.15:0))};
@@ -1615,6 +1788,7 @@ function settleDay(){
     if(day7()){S.day7Ignored=true;S.day7IgnoredUsers=churn;}
   }
   postPendingAccounts();
+  const activityPostings=postActivitySettlementEntries();
   S.cash-=FIXED_BURN;S.fixedSpend=FIXED_BURN;S.settled=true;
   const change=S.cash-S.dayStartCash,broke=S.cash<=0;
   const rows=[
@@ -1626,6 +1800,7 @@ function settleDay(){
     ...(S.refundPaid?[['Refunds from yesterday’s promise',`−${plainMoney(S.refundPaid)}`]]:[]),
     ...(S.purchaseSpend?[['AI credits bought with cash',`−${plainMoney(S.purchaseSpend)}`]]:[]),
     ...(S.activitySpend?[[`Outside activities (${activities().map(a=>a.name).join(', ')}) · direct cost`,`−${plainMoney(S.activitySpend)}`]]:[]),
+    ...activitySettlementRows(activityPostings),
     ...(S.coffeeSpend?[['Coffee',`−${plainMoney(S.coffeeSpend)}`]]:[]),
     ...(S.launchSettlement?[[`Launch users (${S.launchSettlement.usersBefore} already carried into today; ${S.launchSettlement.baseUsers} market response${S.launchSettlement.trustCut?` − ${S.launchSettlement.trustCut} trust adjustment`:''})`,`+${S.launchSettlement.usersAdded} users`],
       ['Deployed daily AI cost',`${plainMoney(S.launchSettlement.aiBefore)} → ${plainMoney(S.launchSettlement.aiAfter)} · next full day ${money(S.launchSettlement.aiAfter-S.launchSettlement.aiBefore)}`]]:[]),
@@ -1640,7 +1815,7 @@ function renderSettlementReceipt(rows,change,broke,t){
   <div class="modal-body">
     <table class="settle-table">${rows.map(r=>`<tr><td>${r[0]}</td><td>${r[1]}</td></tr>`).join('')}<tr class="total"><td>Cash change / closing cash</td><td>${money(change)} · ${plainMoney(S.cash)}</td></tr></table>
     ${S.usersLost?`<div class="receipt bill"><b>The skipped problem, as promised</b><div class="r-row"><span>${t.ignoreLine}</span></div><div class="r-row"><span>Users</span><strong>${S.users+S.usersLost} → ${S.users}</strong></div></div>`:''}
-    ${activities().map(a=>`<div class="impact"><b>Outside activity · ${a.name}</b>${a.effect}</div>`).join('')}
+    ${activities().map(activityImpact).join('')}
     ${S.demoAttended?`<div class="impact"><b>${eventName(t)}</b>${S.demoResult}</div>`:''}
     <div class="brief-grid">
       <div class="brief-card"><div class="k">Tomorrow’s users</div><strong>${S.users}</strong><p>${S.usersLost?`${S.usersLost} left over the skipped problem.`:S.issueResolved?'The chosen problem is fixed for them.':'No losses tonight.'}</p></div>
@@ -1674,14 +1849,14 @@ function startDay8(){
     else{e.odds=Math.min(0.9,e.odds+0.15);}
   });
   // overnight effects
-  S.day=8;S.time=9;S.focus=4;
+  S.day=8;S.time=9;S.energy=4;
   S.aiDaily*=DAY8_MULTIPLIER;
   if(refund){S.users=Math.max(0,S.users-4);S.trustPenalty=0.4;S.exposures.forEach(e=>{if(e.blown)e.amount-=Math.round(e.amount*REFUND_SHARE);});}
   // reset day state
   S.selectedTaskId='';S.answers={};S.qIndex=0;S.selected=[];S.reviewedSlots=[];S.inviteShown=false;
   S.oracleDay8={stage:'question',answer:'',behavior:'',evidence:[],release:null};
   S.build=null;S.tested=false;S.testResults=[];S.version=0;S.shipped=false;S.issueResolved=false;S.pendingLaunch=null;S.launchSettlement=null;
-  S.demoAttended=false;S.demoResult='';S.activityIds=[];S.activitySpend=0;
+  S.demoAttended=false;S.demoResult='';S.activityIds=[];S.activitySpend=0;S.activityResults={};
   S.morningDone=false;S.settled=false;delete S._settlementRows;delete S._settlementChange;delete S._settlementBroke;
   S.dayStartCash=S.cash;S.dayStartAiDaily=S.aiDaily;S.opRevenue=0;S.opAI=0;S.sponsorCash=0;S.preorderCash=0;S.coffeeSpend=0;S.purchaseSpend=0;S.fixedSpend=0;S.usersLost=0;
   S.pos={x:50,y:70};S.facing='front';$('player').style.left=`${S.pos.x}%`;$('player').style.top=`${S.pos.y}%`;applyFacing();
@@ -1836,7 +2011,7 @@ function showRecord(tab){
   ];
   if(S.recordTab==='people')rows=[
     ['Founder (you)','Chooses the problem, writes the instruction, decides the promise.'],
-    ['Life outside the garage',activities().length?activities().map(a=>`${a.name} at ${a.place}: ${a.effect}`).join(' · '):'No outside activities yet today. The map remains available while time and cash allow.'],
+    ['Life outside the garage',activities().length?activities().map(a=>{const result=activityResult(a.id);return `${a.name} at ${a.location}${result?.outcomeTitle?`: ${result.outcomeTitle}`:''}`;}).join(' · '):'No outside activities yet today. The map remains available while time and cash allow.'],
     ['USER_0047','The person the company exists for. His grandma hit the glare failure the night before Day 7.']
   ];
   openModal(`<div class="modal-head"><div><div class="micro">Company record</div><h2 id="modal-title">Product, builds, promises, people</h2></div><button class="close" data-close>×</button></div>

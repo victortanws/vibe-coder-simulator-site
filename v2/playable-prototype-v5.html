@@ -66,6 +66,7 @@
   .task-art{height:96px;background-size:300% 200%;background-repeat:no-repeat;image-rendering:auto;border-bottom:1px solid var(--line)}
   .task-card .inner{padding:12px 14px 0;display:flex;flex-direction:column;flex:1}
   .task-card .app-type{font:700 10px ui-monospace,monospace;color:var(--cyan);letter-spacing:.08em;text-transform:uppercase}.task-card h3{font-size:16px;margin:7px 0}.task-card p{font-size:12px;color:var(--muted);line-height:1.45;margin:0 0 8px}
+  .activity-title{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin:7px 0 8px}.activity-title h3{margin:0}.activity-costs{display:flex;justify-content:flex-end;gap:5px;flex-wrap:wrap}.activity-cost{border:1px solid var(--line);border-radius:999px;padding:3px 7px;font:800 10px ui-monospace,monospace;white-space:nowrap}.cash-cost,.energy-cost{color:var(--red);border-color:rgba(255,119,119,.45);background:rgba(255,119,119,.08)}.cash-free{color:var(--muted);background:#171d29}.energy-gain{color:var(--green);border-color:rgba(115,231,166,.45);background:rgba(115,231,166,.08)}
   .receipt{border:1px dashed var(--line);border-radius:9px;background:#11151f;padding:8px 10px;margin:0 0 10px;font-size:11px}
   .receipt b{display:block;font-size:10px;letter-spacing:.07em;text-transform:uppercase;color:var(--yellow);margin-bottom:4px}
   .receipt.gain b{color:var(--green)}.receipt.bill b{color:var(--red)}
@@ -169,7 +170,7 @@
     <div class="hud-card"><span>Cash</span><strong id="hud-cash">$700.00</strong><small id="hud-cash-note">midnight costs $105</small></div>
     <div class="hud-card good"><span>Daily product result</span><strong id="hud-margin">+$5.31/day</strong><small id="hud-margin-note">user revenue minus daily AI cost</small></div>
     <div class="hud-card"><span>AI credits (⚡)</span><strong id="hud-compute">80 ⚡</strong><small id="hud-compute-note">prepaid · builds and tests use these</small></div>
-    <div class="hud-card"><span>Focus</span><strong id="hud-energy">4 / 5</strong><small>building and testing consume it</small></div>
+    <div class="hud-card"><span>Energy</span><strong id="hud-energy">4 / 5</strong><small>building and testing consume it</small></div>
     <div class="hud-card warn"><span>Runway</span><strong id="hud-runway">7.0 days</strong><small>days until the money runs out</small></div>
   </section>
 
@@ -192,7 +193,7 @@
         <button class="station" data-station="oracle" aria-label="Open ORACLE product studio"><span class="dot"></span><strong>ORACLE STUDIO</strong><small>turn decisions into a build</small></button>
         <button class="station" data-station="test" aria-label="Open test bench"><span class="dot"></span><strong>TEST BENCH</strong><small>replay the incident</small></button>
         <button class="station" data-station="activity" aria-label="Open the outside activity map"><span class="dot"></span><strong>GO OUT / MAP</strong><small>activities around the Valley</small></button>
-        <button class="station" data-station="coffee" aria-label="Open coffee bar"><span class="dot"></span><strong>COFFEE</strong><small>$18 · restores 2 Focus</small></button>
+        <button class="station" data-station="coffee" aria-label="Open coffee bar"><span class="dot"></span><strong>COFFEE</strong><small>$18 · restores 2 Energy</small></button>
         <button class="station locked" data-station="door" aria-label="Open customer event and release"><span class="dot"></span><strong>EVENT / RELEASE</strong><small>customer deadline varies</small></button>
         <div class="player" id="player" role="img" aria-label="Founder in orange-and-white hoodie"></div>
       </section>

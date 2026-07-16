@@ -24,6 +24,8 @@
       return;
     }
     game.src='v2/playable-prototype-v5.html';
+    const note=campaign.contentDocument.querySelector('.demo-note p');
+    if(note)note.textContent='Choose a station to open its action.';
     campaign.classList.add('ready');
   },{once:true});
 </script>
