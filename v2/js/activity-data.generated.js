@@ -340,7 +340,7 @@ window.VCS_ACTIVITY_DATA = [
         "assetTags": [
           "workout"
         ],
-        "script": "SYSTEM: You return to the garage steadier. Energy +2.",
+        "script": "SYSTEM: You return to HQ steadier. Energy +2.",
         "effects": [
           {
             "id": "energy-gain",
@@ -809,7 +809,7 @@ window.VCS_ACTIVITY_DATA = [
       {
         "id": "changing-light-test",
         "weight": 1,
-        "title": "New test idea saved",
+        "title": "A future test for ClearRead",
         "assetTags": [
           "changing-light"
         ],
@@ -978,7 +978,7 @@ window.VCS_ACTIVITY_DATA = [
       {
         "id": "whatsapp-referrals",
         "weight": 1,
-        "title": "Grandma has been talking",
+        "title": "Grandma spreads the word",
         "assetTags": [
           "community-referral"
         ],
